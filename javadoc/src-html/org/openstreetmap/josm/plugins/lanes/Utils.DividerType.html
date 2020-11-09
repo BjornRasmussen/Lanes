@@ -1,0 +1,229 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">package org.openstreetmap.josm.plugins.lanes;</a>
+<span class="sourceLineNo">002</span><a id="line.2"></a>
+<span class="sourceLineNo">003</span><a id="line.3">import org.openstreetmap.josm.data.coor.LatLon;</a>
+<span class="sourceLineNo">004</span><a id="line.4">import org.openstreetmap.josm.data.osm.Node;</a>
+<span class="sourceLineNo">005</span><a id="line.5">import org.openstreetmap.josm.data.osm.Way;</a>
+<span class="sourceLineNo">006</span><a id="line.6">import org.openstreetmap.josm.tools.ImageProvider;</a>
+<span class="sourceLineNo">007</span><a id="line.7">import org.openstreetmap.josm.tools.RightAndLefthandTraffic;</a>
+<span class="sourceLineNo">008</span><a id="line.8"></a>
+<span class="sourceLineNo">009</span><a id="line.9">import javax.imageio.ImageIO;</a>
+<span class="sourceLineNo">010</span><a id="line.10">import java.awt.*;</a>
+<span class="sourceLineNo">011</span><a id="line.11">import java.io.File;</a>
+<span class="sourceLineNo">012</span><a id="line.12">import java.io.IOException;</a>
+<span class="sourceLineNo">013</span><a id="line.13">import java.util.ArrayList;</a>
+<span class="sourceLineNo">014</span><a id="line.14">import java.util.List;</a>
+<span class="sourceLineNo">015</span><a id="line.15"></a>
+<span class="sourceLineNo">016</span><a id="line.16">public class Utils {</a>
+<span class="sourceLineNo">017</span><a id="line.17">    // &lt;editor-fold defaultstate="collapsed" desc="Constants"&gt;</a>
+<span class="sourceLineNo">018</span><a id="line.18">    public final static double WIDTH_LANES = 3.5; // Standard lane width.</a>
+<span class="sourceLineNo">019</span><a id="line.19">    public final static double WIDTH_BIKE_LANES = 1.75; // Bike lane width.</a>
+<span class="sourceLineNo">020</span><a id="line.20"></a>
+<span class="sourceLineNo">021</span><a id="line.21">    public final static double RENDERING_WIDTH_DIVIDER = 0.8;</a>
+<span class="sourceLineNo">022</span><a id="line.22">    public final static double WIDTH_INVALID_METERS = 5.0;</a>
+<span class="sourceLineNo">023</span><a id="line.23"></a>
+<span class="sourceLineNo">024</span><a id="line.24">    public final static double DIST_BETWEEN_TURNS = 24.0; // Distance in meters between turn arrows on rendered lanes.</a>
+<span class="sourceLineNo">025</span><a id="line.25">    public final static double DIST_TO_FIRST_TURN = 13.5; // Distance in meters to first turn arrow on rendered lanes.</a>
+<span class="sourceLineNo">026</span><a id="line.26"></a>
+<span class="sourceLineNo">027</span><a id="line.27">    public final static Color DEFAULT_ASPHALT_COLOR = new Color(40, 40, 50, 200);</a>
+<span class="sourceLineNo">028</span><a id="line.28">    public final static Color DEFAULT_SELECTED_ASPHALT_COLOR = new Color(150, 40, 50, 200);</a>
+<span class="sourceLineNo">029</span><a id="line.29">    public final static Color DEFAULT_DIVIDER_COLOR = Color.WHITE;</a>
+<span class="sourceLineNo">030</span><a id="line.30">    public final static Color DEFAULT_CENTRE_DIVIDER_COLOR = Color.YELLOW;</a>
+<span class="sourceLineNo">031</span><a id="line.31">    public final static Color DEFAULT_INVALID_COLOR = new Color(255, 40, 0);</a>
+<span class="sourceLineNo">032</span><a id="line.32"></a>
+<span class="sourceLineNo">033</span><a id="line.33">    public final static Image uTurnLeft = ImageProvider.get("roadmarkings", "u_turn_left.png").getImage();</a>
+<span class="sourceLineNo">034</span><a id="line.34">    public final static Image uTurnRight = ImageProvider.get("roadmarkings", "u_turn_right.png").getImage();</a>
+<span class="sourceLineNo">035</span><a id="line.35">    public final static Image left = ImageProvider.get("roadmarkings", "left.png").getImage();</a>
+<span class="sourceLineNo">036</span><a id="line.36">    public final static Image right = ImageProvider.get("roadmarkings", "right.png").getImage();</a>
+<span class="sourceLineNo">037</span><a id="line.37">    public final static Image mergeLeft = ImageProvider.get("roadmarkings", "merge_left.png").getImage();</a>
+<span class="sourceLineNo">038</span><a id="line.38">    public final static Image mergeRight = ImageProvider.get("roadmarkings", "merge_right.png").getImage();</a>
+<span class="sourceLineNo">039</span><a id="line.39">    public final static Image slightLeft = ImageProvider.get("roadmarkings", "slight_left.png").getImage();</a>
+<span class="sourceLineNo">040</span><a id="line.40">    public final static Image slightRight = ImageProvider.get("roadmarkings", "slight_right.png").getImage();</a>
+<span class="sourceLineNo">041</span><a id="line.41">    public final static Image through = ImageProvider.get("roadmarkings", "through.png").getImage();</a>
+<span class="sourceLineNo">042</span><a id="line.42"></a>
+<span class="sourceLineNo">043</span><a id="line.43">    public final static Image lr_uTurnLeft = ImageProvider.get("lowresroadmarkings", "u_turn_left.png").getImage();</a>
+<span class="sourceLineNo">044</span><a id="line.44">    public final static Image lr_uTurnRight = ImageProvider.get("lowresroadmarkings", "u_turn_right.png").getImage();</a>
+<span class="sourceLineNo">045</span><a id="line.45">    public final static Image lr_left = ImageProvider.get("lowresroadmarkings", "left.png").getImage();</a>
+<span class="sourceLineNo">046</span><a id="line.46">    public final static Image lr_right = ImageProvider.get("lowresroadmarkings", "right.png").getImage();</a>
+<span class="sourceLineNo">047</span><a id="line.47">    public final static Image lr_mergeLeft = ImageProvider.get("lowresroadmarkings", "merge_left.png").getImage();</a>
+<span class="sourceLineNo">048</span><a id="line.48">    public final static Image lr_mergeRight = ImageProvider.get("lowresroadmarkings", "merge_right.png").getImage();</a>
+<span class="sourceLineNo">049</span><a id="line.49">    public final static Image lr_slightLeft = ImageProvider.get("lowresroadmarkings", "slight_left.png").getImage();</a>
+<span class="sourceLineNo">050</span><a id="line.50">    public final static Image lr_slightRight = ImageProvider.get("lowresroadmarkings", "slight_right.png").getImage();</a>
+<span class="sourceLineNo">051</span><a id="line.51">    public final static Image lr_through = ImageProvider.get("lowresroadmarkings", "through.png").getImage();</a>
+<span class="sourceLineNo">052</span><a id="line.52"></a>
+<span class="sourceLineNo">053</span><a id="line.53">    public enum LaneType {DRIVING, BICYCLE, BUS, HOV}</a>
+<span class="sourceLineNo">054</span><a id="line.54">    public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID,</a>
+<span class="sourceLineNo">055</span><a id="line.55">        CENTRE_DIVIDER_WIDE, CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE}</a>
+<span class="sourceLineNo">056</span><a id="line.56">    // &lt;/editor-fold&gt;</a>
+<span class="sourceLineNo">057</span><a id="line.57"></a>
+<span class="sourceLineNo">058</span><a id="line.58">    // &lt;editor-fold defaultstate="collapsed" desc="Methods for Finding Parallel Ways"&gt;</a>
+<span class="sourceLineNo">059</span><a id="line.59"></a>
+<span class="sourceLineNo">060</span><a id="line.60">    public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset) {</a>
+<span class="sourceLineNo">061</span><a id="line.61">        LatLon[] points = new LatLon[way.getNodesCount()];</a>
+<span class="sourceLineNo">062</span><a id="line.62">        double[] distanceIntoWay = new double[way.getNodesCount()];</a>
+<span class="sourceLineNo">063</span><a id="line.63">        double distanceOfWay = 0;</a>
+<span class="sourceLineNo">064</span><a id="line.64">        for (int i = 0; i &lt; points.length; i++) {</a>
+<span class="sourceLineNo">065</span><a id="line.65">            points[i] = way.getNode(i).getCoor();</a>
+<span class="sourceLineNo">066</span><a id="line.66">            if (i != 0) {</a>
+<span class="sourceLineNo">067</span><a id="line.67">                try {</a>
+<span class="sourceLineNo">068</span><a id="line.68">                    distanceOfWay += points[i - 1].greatCircleDistance(points[i]);</a>
+<span class="sourceLineNo">069</span><a id="line.69">                } catch (Exception ignored) {}</a>
+<span class="sourceLineNo">070</span><a id="line.70">            }</a>
+<span class="sourceLineNo">071</span><a id="line.71">            distanceIntoWay[i] = distanceOfWay;</a>
+<span class="sourceLineNo">072</span><a id="line.72">        }</a>
+<span class="sourceLineNo">073</span><a id="line.73"></a>
+<span class="sourceLineNo">074</span><a id="line.74">        // Get angle offset:</a>
+<span class="sourceLineNo">075</span><a id="line.75">        double angleOffset = (useAngleOffset ? -1 : 0) * Math.asin((offsetEnd-offsetStart)/distanceOfWay);</a>
+<span class="sourceLineNo">076</span><a id="line.76"></a>
+<span class="sourceLineNo">077</span><a id="line.77">        LatLon[] output = new LatLon[points.length];</a>
+<span class="sourceLineNo">078</span><a id="line.78"></a>
+<span class="sourceLineNo">079</span><a id="line.79">        // Deal with first node</a>
+<span class="sourceLineNo">080</span><a id="line.80">        double angle;</a>
+<span class="sourceLineNo">081</span><a id="line.81">        if (points.length &lt; 2) return null;</a>
+<span class="sourceLineNo">082</span><a id="line.82">        try {</a>
+<span class="sourceLineNo">083</span><a id="line.83">            // If points are at same location, return the way, since getting a parallel way would be hard.</a>
+<span class="sourceLineNo">084</span><a id="line.84">            angle = points[0].bearing(points[1]);</a>
+<span class="sourceLineNo">085</span><a id="line.85">        } catch (NullPointerException e) {</a>
+<span class="sourceLineNo">086</span><a id="line.86">            return way;</a>
+<span class="sourceLineNo">087</span><a id="line.87">        }</a>
+<span class="sourceLineNo">088</span><a id="line.88">        output[0] = getLatLonRelative(points[0], angle-(Math.PI / 2.0) + angleOffset, offsetStart);</a>
+<span class="sourceLineNo">089</span><a id="line.89"></a>
+<span class="sourceLineNo">090</span><a id="line.90">        // Deal with all other nodes</a>
+<span class="sourceLineNo">091</span><a id="line.91">        for (int i = 1; i &lt; points.length - 1; i++) {</a>
+<span class="sourceLineNo">092</span><a id="line.92">            double angleToPrevPoint;</a>
+<span class="sourceLineNo">093</span><a id="line.93">            double angleToNextPoint;</a>
+<span class="sourceLineNo">094</span><a id="line.94">            try {</a>
+<span class="sourceLineNo">095</span><a id="line.95">                // If points are at same location, return the way, since getting a parallel way would be hard.s</a>
+<span class="sourceLineNo">096</span><a id="line.96">                angleToPrevPoint = points[i].bearing(points[i - 1]);</a>
+<span class="sourceLineNo">097</span><a id="line.97">                angleToNextPoint = points[i].bearing(points[i + 1]);</a>
+<span class="sourceLineNo">098</span><a id="line.98">            } catch (NullPointerException e) {</a>
+<span class="sourceLineNo">099</span><a id="line.99">                return way;</a>
+<span class="sourceLineNo">100</span><a id="line.100">            }</a>
+<span class="sourceLineNo">101</span><a id="line.101">            double angleBetween = (angleToNextPoint + angleToPrevPoint) / 2;</a>
+<span class="sourceLineNo">102</span><a id="line.102">            if (angleToNextPoint &lt; angleToPrevPoint) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);</a>
+<span class="sourceLineNo">103</span><a id="line.103"></a>
+<span class="sourceLineNo">104</span><a id="line.104">            double amountThrough = distanceIntoWay[i]/distanceOfWay;</a>
+<span class="sourceLineNo">105</span><a id="line.105">            double offsetAtNode = offsetStart * (1 - amountThrough) + offsetEnd * amountThrough;</a>
+<span class="sourceLineNo">106</span><a id="line.106"></a>
+<span class="sourceLineNo">107</span><a id="line.107">            double anglePrevToNormal = (angleBetween - angleToNextPoint) % (2 * Math.PI);</a>
+<span class="sourceLineNo">108</span><a id="line.108"></a>
+<span class="sourceLineNo">109</span><a id="line.109">            double offset = offsetAtNode / Math.abs(Math.sin(anglePrevToNormal));</a>
+<span class="sourceLineNo">110</span><a id="line.110"></a>
+<span class="sourceLineNo">111</span><a id="line.111">            output[i] = getLatLonRelative(points[i], angleBetween + angleOffset, offset);</a>
+<span class="sourceLineNo">112</span><a id="line.112">        }</a>
+<span class="sourceLineNo">113</span><a id="line.113"></a>
+<span class="sourceLineNo">114</span><a id="line.114">        // Deal with last node</a>
+<span class="sourceLineNo">115</span><a id="line.115">        double angleToPrev = points[points.length-1].bearing(points[points.length-2]);</a>
+<span class="sourceLineNo">116</span><a id="line.116">        output[points.length-1] = getLatLonRelative(points[points.length-1], angleToPrev+(Math.PI / 2.0) + angleOffset, offsetEnd);</a>
+<span class="sourceLineNo">117</span><a id="line.117">        // TODO handle loop roads.</a>
+<span class="sourceLineNo">118</span><a id="line.118"></a>
+<span class="sourceLineNo">119</span><a id="line.119">        // Convert to way format and return</a>
+<span class="sourceLineNo">120</span><a id="line.120">        List&lt;Node&gt; outputNodes = new ArrayList&lt;&gt;();</a>
+<span class="sourceLineNo">121</span><a id="line.121">        for (LatLon ll : output) outputNodes.add(new Node(ll));</a>
+<span class="sourceLineNo">122</span><a id="line.122"></a>
+<span class="sourceLineNo">123</span><a id="line.123">        Way outputWay = new Way();</a>
+<span class="sourceLineNo">124</span><a id="line.124">        outputWay.setNodes(outputNodes);</a>
+<span class="sourceLineNo">125</span><a id="line.125"></a>
+<span class="sourceLineNo">126</span><a id="line.126">        return outputWay;</a>
+<span class="sourceLineNo">127</span><a id="line.127">    }</a>
+<span class="sourceLineNo">128</span><a id="line.128"></a>
+<span class="sourceLineNo">129</span><a id="line.129">    public static LatLon getLatLonRelative(LatLon from, double bearing, double numMeters) {</a>
+<span class="sourceLineNo">130</span><a id="line.130">        double metersPerDegreeLat = 111319.5;</a>
+<span class="sourceLineNo">131</span><a id="line.131">        double metersPerDegreeLon = metersPerDegreeLat * Math.cos(from.getY() / 180.0 * Math.PI);</a>
+<span class="sourceLineNo">132</span><a id="line.132">        double dx = Math.sin(bearing) * numMeters / metersPerDegreeLon;</a>
+<span class="sourceLineNo">133</span><a id="line.133">        double dy = Math.cos(bearing) * numMeters / metersPerDegreeLat;</a>
+<span class="sourceLineNo">134</span><a id="line.134">        return new LatLon(from.lat() + dy, from.lon() + dx);</a>
+<span class="sourceLineNo">135</span><a id="line.135">    }</a>
+<span class="sourceLineNo">136</span><a id="line.136"></a>
+<span class="sourceLineNo">137</span><a id="line.137">    public static double metersToProjectedUnits(double meters, Way location) {</a>
+<span class="sourceLineNo">138</span><a id="line.138">        return meters / Math.cos(location.getNode(0).getCoor().getY() / 180.0 * Math.PI);</a>
+<span class="sourceLineNo">139</span><a id="line.139">    }</a>
+<span class="sourceLineNo">140</span><a id="line.140"></a>
+<span class="sourceLineNo">141</span><a id="line.141">    // &lt;/editor-fold&gt;</a>
+<span class="sourceLineNo">142</span><a id="line.142"></a>
+<span class="sourceLineNo">143</span><a id="line.143">    public static boolean isRightHand(Way location) {</a>
+<span class="sourceLineNo">144</span><a id="line.144">        return RightAndLefthandTraffic.isRightHandTraffic(location.getNode(0).getCoor());</a>
+<span class="sourceLineNo">145</span><a id="line.145">    }</a>
+<span class="sourceLineNo">146</span><a id="line.146"></a>
+<span class="sourceLineNo">147</span><a id="line.147">    private static Image getImage(String location) {</a>
+<span class="sourceLineNo">148</span><a id="line.148">        try {</a>
+<span class="sourceLineNo">149</span><a id="line.149">            return ImageIO.read(new File(location));</a>
+<span class="sourceLineNo">150</span><a id="line.150">        } catch (IOException e) {</a>
+<span class="sourceLineNo">151</span><a id="line.151">            throw new RuntimeException("Couldn't find image " + location);</a>
+<span class="sourceLineNo">152</span><a id="line.152">        }</a>
+<span class="sourceLineNo">153</span><a id="line.153">    }</a>
+<span class="sourceLineNo">154</span><a id="line.154"></a>
+<span class="sourceLineNo">155</span><a id="line.155">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

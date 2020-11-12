@@ -1,2 +1,10 @@
 Leif Rasmussen | 354lbr@gmail.com | Licensed under the GPL V2
 
+The plugin is launched from the LaneMappingMode class,
+which creates a LanesPlugin instance.  The LanesPlugin stores one
+RoadSegmentRenderer per downloaded way with lane tags.
+The RoadPiece, Lane, Divider, and RoadEdge classes are all parts
+of roads, and are stored inside a RoadSegmentRenderer.
+The Utils class has some nice tools and constants that several other
+classes need to access.
+

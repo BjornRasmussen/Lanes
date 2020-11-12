@@ -27,10 +27,9 @@
 <span class="sourceLineNo">018</span><a id="line.18">    @Override</a>
 <span class="sourceLineNo">019</span><a id="line.19">    void render(Graphics2D g) {</a>
 <span class="sourceLineNo">020</span><a id="line.20">        renderAsphalt(g);</a>
-<span class="sourceLineNo">021</span><a id="line.21">        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID, _way.isOneway() == 1 &amp;&amp;</a>
-<span class="sourceLineNo">022</span><a id="line.22">                (Utils.isRightHand(_way) ? _direction == -1 : _direction == 1));</a>
-<span class="sourceLineNo">023</span><a id="line.23">    }</a>
-<span class="sourceLineNo">024</span><a id="line.24">}</a>
+<span class="sourceLineNo">021</span><a id="line.21">        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID, _way.isOneway() == 1 &amp;&amp; _direction == -1);</a>
+<span class="sourceLineNo">022</span><a id="line.22">    }</a>
+<span class="sourceLineNo">023</span><a id="line.23">}</a>
 
 
 

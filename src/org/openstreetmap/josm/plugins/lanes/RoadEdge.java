@@ -18,7 +18,6 @@ public class RoadEdge extends RoadPiece {
     @Override
     void render(Graphics2D g) {
         renderAsphalt(g);
-        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID, _way.isOneway() == 1 &&
-                (Utils.isRightHand(_way) ? _direction == -1 : _direction == 1));
+        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID, _way.isOneway() == 1 && _direction == -1);
     }
 }

@@ -208,15 +208,15 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     // <editor-fold desc="Methods for Handling Mouse Events">
     @Override
     public void mouseClicked(MouseEvent e) {
-        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
-        RoadSegmentRenderer r = getShortestSegmentMouseEvent(e);
-        if (r != null) {
-            r.mouseClicked(e);
-        } else {
-            RoadSegmentRenderer.selected = "";
-            MainApplication.getLayerManager().getActiveData().clearSelection();
-        }
-        _mv.repaint();
+//        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
+//        RoadSegmentRenderer r = getShortestSegmentMouseEvent(e);
+//        if (r != null) {
+//            r.mouseClicked(e);
+//        } else {
+//            RoadSegmentRenderer.selected = "";
+//            MainApplication.getLayerManager().getActiveData().clearSelection();
+//        }
+//        _mv.repaint();
     }
 
     // <editor-fold defaultstate="collapsed" desc="Unused mouse listener methods">

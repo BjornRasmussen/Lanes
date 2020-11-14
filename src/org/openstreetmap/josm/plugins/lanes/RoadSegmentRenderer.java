@@ -281,7 +281,7 @@ public class RoadSegmentRenderer {
             } else {
                 _backwardLanes.get(_backwardLanes.size() - 1).setRightPiece(_bothWaysLane);
                 _bothWaysLane.setRightPiece(_backwardLanes.get(_backwardLanes.size() - 1));
-                _forwardLanes.get(_backwardLanes.size() - 1).setRightPiece(_bothWaysLane);
+                _forwardLanes.get(_forwardLanes.size() - 1).setRightPiece(_bothWaysLane);
                 _bothWaysLane.setLeftPiece(_forwardLanes.get(_forwardLanes.size() - 1));
             }
         }

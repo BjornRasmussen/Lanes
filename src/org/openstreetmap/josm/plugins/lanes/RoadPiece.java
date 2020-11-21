@@ -74,7 +74,7 @@ abstract class RoadPiece {
         g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
 
-    protected void renderRoadLine(Graphics2D g, double offsetStart, double offsetEnd, Utils.DividerType type, boolean isCentreDivider) {
+    protected void renderRoadLine(Graphics2D g, double offsetStart, double offsetEnd, Utils.DividerType type, Color color) {
         double pixelsPerMeter = 100.0 / _mv.getDist100Pixel();
         double stripeWidth = 1.4/8;
 
@@ -87,43 +87,43 @@ abstract class RoadPiece {
         } else if (type == Utils.DividerType.SOLID) {
             g.setStroke(GuiHelper.getCustomizedStroke(((int) (pixelsPerMeter / 8 + 1.5)) + ""));
         } else if (type == Utils.DividerType.DOUBLE_SOLID) {
-            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, isCentreDivider);
-            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, isCentreDivider);
+            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, color);
+            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, color);
             return;
         } else if (type == Utils.DividerType.DASHED_FOR_RIGHT) {
-            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, isCentreDivider);
-            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.DASHED, isCentreDivider);
+            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, color);
+            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.DASHED, color);
             return;
         } else if (type == Utils.DividerType.DASHED_FOR_LEFT) {
-            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, isCentreDivider);
-            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.DASHED, isCentreDivider);
+            renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, color);
+            renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.DASHED, color);
             return;
         } else if (type == Utils.DividerType.CENTRE_DIVIDER_WIDE) {
             renderRoadLine(g, offsetStart + ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DOUBLE_SOLID, isCentreDivider);
+                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DOUBLE_SOLID, color);
             renderRoadLine(g, offsetStart - ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DOUBLE_SOLID, isCentreDivider);
+                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DOUBLE_SOLID, color);
             return;
         } else if (type == Utils.DividerType.FORWARD_DIVIDER_WIDE) {
             renderRoadLine(g, offsetStart + ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, isCentreDivider);
+                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, color);
             renderRoadLine(g, offsetStart - ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, isCentreDivider);
+                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, color);
             return;
         } else if (type == Utils.DividerType.BACKWARD_DIVIDER_WIDE) {
             renderRoadLine(g, offsetStart + ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, isCentreDivider);
+                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, color);
             renderRoadLine(g, offsetStart - ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, isCentreDivider);
+                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.SOLID, color);
             return;
         } else if (type == Utils.DividerType.CENTRE_LANE) {
             renderRoadLine(g, offsetStart + ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_RIGHT, isCentreDivider);
+                    offsetEnd + ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_RIGHT, color);
             renderRoadLine(g, offsetStart - ((getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_LEFT, isCentreDivider);
+                    offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_LEFT, color);
             return;
         }
-        Way alignment = Utils.getParallel(_parent.getAlignment(), offsetStart, offsetEnd, false);
+        Way alignment = Utils.getParallel(_parent.getAlignment(), offsetStart, offsetEnd, false, _parent.startAngle, _parent.endAngle);
         int[] xPoints = new int[alignment.getNodesCount()];
         int[] yPoints = new int[alignment.getNodesCount()];
         for (int i = 0; i < alignment.getNodesCount(); i++) {
@@ -131,10 +131,10 @@ abstract class RoadPiece {
             yPoints[i] = (int) (_mv.getPoint(alignment.getNode(i).getCoor()).getY() + 0.5);
         }
 
-        g.setColor(isCentreDivider ? Utils.DEFAULT_CENTRE_DIVIDER_COLOR : Utils.DEFAULT_DIVIDER_COLOR);
+        g.setColor(color);
         g.drawPolyline(xPoints, yPoints, xPoints.length);
 
-        // THESE TWO ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
+        // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
         g.setColor(new Color(0, 0, 0, 0));
         g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
@@ -167,8 +167,8 @@ abstract class RoadPiece {
         double widthStart = getWidth(true);
         double widthEnd = getWidth(false);
 
-        Way left = Utils.getParallel(_parent.getAlignment(), _offsetStart + (widthStart / 2.0), _offsetEnd + (widthEnd / 2.0), false);
-        Way right = Utils.getParallel(_parent.getAlignment(), _offsetStart - (widthStart / 2.0), _offsetEnd - (widthEnd / 2.0), false);
+        Way left = Utils.getParallel(_parent.getAlignment(), _offsetStart + (widthStart / 2.0), _offsetEnd + (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
+        Way right = Utils.getParallel(_parent.getAlignment(), _offsetStart - (widthStart / 2.0), _offsetEnd - (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
 
         int[] xPoints = new int[left.getNodesCount() + right.getNodesCount() + 1];
         int[] yPoints = new int[xPoints.length];

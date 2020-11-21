@@ -37,13 +37,21 @@ public class RoadSegmentRenderer {
     private RoadPiece _leftRoadEdge;
     private RoadPiece _rightRoadEdge;
 
+    public double startAngle = Double.NaN;
+    public double endAngle = Double.NaN;
+
+    public double otherStartAngle = Double.NaN;
+    public double otherEndAngle = Double.NaN;
+
+    public LaneMappingMode _parent;
     protected boolean _isValid = true; // Display red error line if tags are wrong.
 
     // </editor-fold>
 
-    public RoadSegmentRenderer(Way w, MapView mv) {
+    public RoadSegmentRenderer(Way w, MapView mv, LaneMappingMode parent) {
         _way = w;
         _mv = mv;
+        _parent = parent;
         try {
             createRoadLayout();
         } catch (Exception e) { _isValid = false; }
@@ -96,6 +104,9 @@ public class RoadSegmentRenderer {
 
         // Generate the click boxes.
         generateClickBoxes();
+
+        // Get previous node and next node from other ways if they exist.
+        getStartAndEndAngle();
     }
 
     public Way getWay() {
@@ -104,6 +115,12 @@ public class RoadSegmentRenderer {
 
     public Way getAlignment() {
         return _alignment;
+    }
+
+    private void getStartAndEndAngle() {
+        startAngle = _alignment.getNode(0).getCoor().bearing(_alignment.getNode(1).getCoor());
+        endAngle = _alignment.getNode(_alignment.getNodesCount()-1).getCoor().
+                bearing(_alignment.getNode(_alignment.getNodesCount()-2).getCoor());
     }
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Converting Child Road Pieces into Tags"
@@ -309,7 +326,7 @@ public class RoadSegmentRenderer {
         _offsetToLeftStart = getPlacementAt(true, false);
         _offsetToLeftEnd = getPlacementAt(false, false);
         double placementDiff = getPlacementAt(false, true) - getPlacementAt(true, true);
-        _alignment = Utils.getParallel(_way, 0, placementDiff, true);
+        _alignment = Utils.getParallel(_way, 0, placementDiff, true, startAngle, endAngle);
         _offsetToLeftEnd -= placementDiff;
     }
 
@@ -564,9 +581,9 @@ public class RoadSegmentRenderer {
     // <editor-fold defaultstate="collapsed" desc="Methods for Handling Mouse Events">
 
     private void generateClickBoxes() {
-        Way leftEdge = Utils.getParallel(_alignment, _offsetToLeftStart, _offsetToLeftEnd, false);
+        Way leftEdge = Utils.getParallel(_alignment, _offsetToLeftStart, _offsetToLeftEnd, false, startAngle, endAngle);
         Way rightEdge = Utils.getParallel(_alignment, _offsetToLeftStart - getWidth(true),
-                _offsetToLeftEnd - getWidth(false), false);
+                _offsetToLeftEnd - getWidth(false), false, startAngle, endAngle);
         List<Node> outline = leftEdge.getNodes();
         for (int i = rightEdge.getNodesCount()-1; i >= 0; i--) {
             outline.add(rightEdge.getNode(i));
@@ -600,4 +617,52 @@ public class RoadSegmentRenderer {
     }
 
     // </editor-fold>
+
+    public double getOtherAngle(boolean start) {
+        if (start && Double.isNaN(otherStartAngle)) {
+            otherStartAngle = calculateOtherAngle(true);
+        }
+
+        if (!start && Double.isNaN(otherEndAngle)) {
+            otherEndAngle = calculateOtherAngle(false);
+        }
+
+        return start ? otherStartAngle : otherEndAngle;
+    }
+
+    private double calculateOtherAngle(boolean start) {
+        Node pivot = _way.getNode(start ? 0 : _way.getNodesCount()-1);
+        int numValidWays = 0;
+        boolean somethingIsNotValid = false;
+        Way otherWay = null;
+        boolean otherWayStartsHere = false;
+        for (Way w : pivot.getParentWays()) {
+            if (w.equals(_way)) continue;
+            otherWay = w;
+            if (_parent.wayIdToRSR.containsKey(w.getId())) {
+                numValidWays++;
+                // Check to ensure that pivot is only part of w at one of the endpoints.
+                int numConnections = 0;
+                for (int i = 0; i < w.getNodesCount(); i++) {
+                    if (!w.getNode(i).equals(pivot)) continue;
+                    numConnections++;
+                    if (i!=0 && i!=w.getNodesCount()-1) {
+                        somethingIsNotValid = true;
+                    }
+                    otherWayStartsHere = i==0;
+                }
+                if (numConnections > 1) somethingIsNotValid = true;
+            }
+        }
+        if (numValidWays != 1) somethingIsNotValid = true;
+        if (somethingIsNotValid) {
+            Node secondToLast = start ? _way.getNode(1) : _way.getNode(_way.getNodesCount() - 2);
+            Node last = start ? _way.getNode(0) : _way.getNode(_way.getNodesCount() - 1);
+            return secondToLast.getCoor().bearing(last.getCoor());
+        } else {
+            Node secondToLast = otherWayStartsHere ? otherWay.getNode(1) : otherWay.getNode(otherWay.getNodesCount() - 2);
+            Node last = otherWayStartsHere ? otherWay.getNode(0) : otherWay.getNode(otherWay.getNodesCount() - 1);
+            return secondToLast.getCoor().bearing(last.getCoor());
+        }
+    }
 }

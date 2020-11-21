@@ -42,6 +42,8 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     private List<RoadSegmentRenderer> roadSegments = null;
     private MapView _mv;
 
+    public Map<Long, RoadSegmentRenderer> wayIdToRSR = new HashMap<>();
+
     public LaneMappingMode(MapFrame mapFrame) {
         super(tr("Lane Editing"), "laneconnectivity.png", tr("Activate lane editing mode"),
                 Shortcut.registerShortcut("mapmode:lanemapping", tr("Mode: {0}",
@@ -148,9 +150,12 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 //    }
 
     private List<RoadSegmentRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
+        wayIdToRSR = new HashMap<>();
         List<RoadSegmentRenderer> output = new ArrayList<>();
         for (Way w : ways) {
-            output.add(new RoadSegmentRenderer(w, mv));
+            RoadSegmentRenderer rsr = new RoadSegmentRenderer(w, mv, this);
+            wayIdToRSR.put(w.getId(), rsr);
+            output.add(rsr);
         }
         return output;
     }

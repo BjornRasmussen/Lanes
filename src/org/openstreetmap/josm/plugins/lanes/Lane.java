@@ -46,7 +46,7 @@ public class Lane extends RoadPiece {
     void render(Graphics2D g) {
         renderAsphalt(g);
         if (_direction == 0) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, true);
+            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
         }
         renderTurnMarkings(g);
     }
@@ -216,7 +216,7 @@ public class Lane extends RoadPiece {
 
             int numDrawn = 0;
             double distSoFar = 0;
-            Way lanePos = Utils.getParallel(_parent.getAlignment(), _offsetStart, _offsetEnd, false);
+            Way lanePos = Utils.getParallel(_parent.getAlignment(), _offsetStart, _offsetEnd, false, _parent.startAngle, _parent.endAngle);
             for (int i = 0; i < lanePos.getNodesCount() - 1; i++) {
                 double distThisTime = lanePos.getNode(i).getCoor().greatCircleDistance(lanePos.getNode(i + 1).getCoor());
                 double angle = lanePos.getNode(i).getCoor().bearing(lanePos.getNode(i + 1).getCoor());

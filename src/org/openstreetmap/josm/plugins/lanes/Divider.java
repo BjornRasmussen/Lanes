@@ -79,15 +79,15 @@ public class Divider extends RoadPiece {
         renderAsphalt(g);
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, true);
+            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
         }
         else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.FORWARD_DIVIDER_WIDE, false);
+            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.BACKWARD_DIVIDER_WIDE, false);
+            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else {
             if (_type == null) getDividerType();
@@ -96,7 +96,7 @@ public class Divider extends RoadPiece {
                 if (_type == Utils.DividerType.DASHED_FOR_RIGHT) type = Utils.DividerType.DASHED_FOR_LEFT;
                 if (_type == Utils.DividerType.DASHED_FOR_LEFT) type = Utils.DividerType.DASHED_FOR_RIGHT;
             }
-            renderRoadLine(g, _offsetStart, _offsetEnd, type, _direction == 0);
+            renderRoadLine(g, _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
         }
     }
 

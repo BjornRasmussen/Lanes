@@ -1,5 +1,6 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 
 import java.awt.*;
@@ -17,7 +18,14 @@ public class RoadEdge extends RoadPiece {
 
     @Override
     void render(Graphics2D g) {
+        String country = "US";
+        String centerColor = Utils.isCenterYellow.containsKey(country) ?
+                Utils.isCenterYellow.get(country) : Utils.isCenterYellow.get("default");
+        String roadEdge = Utils.shoulderLineColor.containsKey(country) ?
+                Utils.shoulderLineColor.get(country) : Utils.shoulderLineColor.get("default");
+
         renderAsphalt(g);
-        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID, _way.isOneway() == 1 && _direction == -1);
+        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID,
+                (_way.isOneway() == 1 && _direction == -1) ? Color.YELLOW : Color.WHITE);
     }
 }

@@ -9,8 +9,9 @@ import org.openstreetmap.josm.tools.RightAndLefthandTraffic;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
 
 public class Utils {
@@ -50,6 +51,10 @@ public class Utils {
     public final static Image lr_slightRight = ImageProvider.get("lowresroadmarkings", "slight_right.png").getImage();
     public final static Image lr_through = ImageProvider.get("lowresroadmarkings", "through.png").getImage();
 
+    public final static Map<String, String> isCenterYellow = getYML("resources/renderinginfo/isCenterYellow");
+    public final static Map<String, String> shoulderLineColor = getYML("resources/renderinginfo/shoulderLineColor");
+    public Map<String, String> isCenterTurnLaneKnown = getYML("resources/renderinginfo/isCenterTurnLaneKnown");
+
     public enum LaneType {DRIVING, BICYCLE, BUS, HOV}
     public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID,
         CENTRE_DIVIDER_WIDE, CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE}
@@ -57,7 +62,20 @@ public class Utils {
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Finding Parallel Ways">
 
-    public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset) {
+//    public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset, Node beforeStart, Node afterEnd) {
+//        List<Node> nodes = way.getNodes();
+//        if (beforeStart != null) nodes.add(0, beforeStart);
+//        if (afterEnd != null) nodes.add(afterEnd);
+//        way.setNodes(nodes);
+//        Way parallel = getParallel(way, offsetStart, offsetEnd, useAngleOffset);
+//        List<Node> nodesNew = parallel.getNodes();
+//        if (beforeStart != null) nodesNew.remove(0);
+//        if (afterEnd != null) nodesNew.remove(nodesNew.size()-1);
+//        parallel.setNodes(nodesNew);
+//        return parallel;
+//    }
+
+    public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset, double angStart, double angEnd) {
         LatLon[] points = new LatLon[way.getNodesCount()];
         double[] distanceIntoWay = new double[way.getNodesCount()];
         double distanceOfWay = 0;
@@ -80,41 +98,49 @@ public class Utils {
         double angle;
         if (points.length < 2) return null;
         try {
-            // If points are at same location, return the way, since getting a parallel way would be hard.
             angle = points[0].bearing(points[1]);
         } catch (NullPointerException e) {
             return way;
         }
-        output[0] = getLatLonRelative(points[0], angle-(Math.PI / 2.0) + angleOffset, offsetStart);
+//        double angleWithoutOtherWay = (angle - (Math.PI / 2.0) + angleOffset) % (2*Math.PI);
+//        double angleOfOtherWay = (angStart + (Math.PI / 2.0)) % (2*Math.PI);
+//        double ave = (angleOfOtherWay+angleWithoutOtherWay) / 2.0;
+//        if (Math.abs(angleOfOtherWay-angleWithoutOtherWay) > Math.PI) {
+//            ave = (ave-2*Math.PI) % (2*Math.PI);
+//        }
+//        double angleAveFromWithoutOtherWay = Math.abs(ave - angleWithoutOtherWay);
+//        offsetStart = offsetStart / Math.cos(angleAveFromWithoutOtherWay);
+        output[0] = getLatLonRelative(points[0], angle-(Math.PI/2) + angleOffset, offsetStart);
 
-        // Deal with all other nodes
-        for (int i = 1; i < points.length - 1; i++) {
-            double angleToPrevPoint;
-            double angleToNextPoint;
-            try {
-                // If points are at same location, return the way, since getting a parallel way would be hard.s
-                angleToPrevPoint = points[i].bearing(points[i - 1]);
-                angleToNextPoint = points[i].bearing(points[i + 1]);
-            } catch (NullPointerException e) {
-                return way;
-            }
-            double angleBetween = (angleToNextPoint + angleToPrevPoint) / 2;
-            if (angleToNextPoint < angleToPrevPoint) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);
 
-            double amountThrough = distanceIntoWay[i]/distanceOfWay;
-            double offsetAtNode = offsetStart * (1 - amountThrough) + offsetEnd * amountThrough;
-
-            double anglePrevToNormal = (angleBetween - angleToNextPoint) % (2 * Math.PI);
-
-            double offset = offsetAtNode / Math.abs(Math.sin(anglePrevToNormal));
-
-            output[i] = getLatLonRelative(points[i], angleBetween + angleOffset, offset);
+    // Deal with all other nodes
+    for (int i = 1; i < points.length - 1; i++) {
+        double angleToPrevPoint;
+        double angleToNextPoint;
+        try {
+            // If points are at same location, return the way, since getting a parallel way would be hard.
+            angleToPrevPoint = points[i].bearing(points[i - 1]);
+            angleToNextPoint = points[i].bearing(points[i + 1]);
+        } catch (NullPointerException e) {
+            return way;
         }
+        double angleBetween = (angleToNextPoint + angleToPrevPoint) / 2;
+        if (angleToNextPoint < angleToPrevPoint) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);
+
+        double amountThrough = distanceIntoWay[i]/distanceOfWay;
+        double offsetAtNode = offsetStart * (1 - amountThrough) + offsetEnd * amountThrough;
+
+        double anglePrevToNormal = (angleBetween - angleToNextPoint) % (2 * Math.PI);
+
+        double offset = offsetAtNode / Math.abs(Math.sin(anglePrevToNormal));
+
+        output[i] = getLatLonRelative(points[i], angleBetween + angleOffset, offset);
+    }
 
         // Deal with last node
-        double angleToPrev = points[points.length-1].bearing(points[points.length-2]);
-        output[points.length-1] = getLatLonRelative(points[points.length-1], angleToPrev+(Math.PI / 2.0) + angleOffset, offsetEnd);
-        // TODO handle loop roads.
+        double angleToPrev = points[points.length - 1].bearing(points[points.length - 2]);
+        output[points.length - 1] = getLatLonRelative(points[points.length - 1], angleToPrev + (Math.PI / 2.0) + angleOffset, offsetEnd);
+
 
         // Convert to way format and return
         List<Node> outputNodes = new ArrayList<>();
@@ -144,12 +170,20 @@ public class Utils {
         return RightAndLefthandTraffic.isRightHandTraffic(location.getNode(0).getCoor());
     }
 
-    private static Image getImage(String location) {
+    private static Map<String, String> getYML(String path) {
+        // This is a pretty basic parser that only supports very simple YML.
         try {
-            return ImageIO.read(new File(location));
+            Map<String, String> output = new HashMap<>();
+            File f = new File(path);
+            Scanner s = new Scanner(f);
+            while (s.hasNext()) {
+                String next = s.next();
+                if (next.charAt(0) == '#') continue;
+                output.put(next.split(":")[0].trim().toUpperCase(), next.split(":")[1].split("#")[0].trim());
+            }
+            return output;
         } catch (IOException e) {
-            throw new RuntimeException("Couldn't find image " + location);
+            return new HashMap<>();
         }
     }
-
 }

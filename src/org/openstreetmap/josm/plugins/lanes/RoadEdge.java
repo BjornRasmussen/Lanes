@@ -1,13 +1,12 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 
 import java.awt.*;
 
 public class RoadEdge extends RoadPiece {
 
-    protected RoadEdge(int direction, int position, MapView mv, RoadSegmentRenderer parent) {
+    protected RoadEdge(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         super(direction, position, mv, parent);
     }
 

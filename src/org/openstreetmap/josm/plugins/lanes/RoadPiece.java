@@ -20,13 +20,13 @@ abstract class RoadPiece {
 
     protected MapView _mv;
     protected Way _way;
-    protected RoadSegmentRenderer _parent;
+    protected MarkedRoadRenderer _parent;
 
     protected RoadPiece _left = null;
     protected RoadPiece _right = null;
 
 
-    protected RoadPiece(int direction, int position, MapView mv, RoadSegmentRenderer parent) {
+    protected RoadPiece(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         _direction = direction;
         _position = position;
         _mv = mv;
@@ -41,10 +41,6 @@ abstract class RoadPiece {
 
     public void setRightPiece(RoadPiece right) {
         _right = right;
-    }
-
-    public boolean mouseEventIsInside(MouseEvent e) {
-        return getAsphaltOutline().contains(e.getPoint());
     }
 
     public void setSelected(boolean selected) {
@@ -66,12 +62,12 @@ abstract class RoadPiece {
     }
 
     protected void renderAsphalt(Graphics2D g) {
-        g.setColor(_selected ? Utils.DEFAULT_SELECTED_ASPHALT_COLOR: Utils.DEFAULT_ASPHALT_COLOR);
-
-        g.fillPolygon(getAsphaltOutline());
-
-        g.setColor(new Color(0, 0, 0, 0));
-        g.setStroke(GuiHelper.getCustomizedStroke("0"));
+//        g.setColor(_selected ? Utils.DEFAULT_SELECTED_ASPHALT_COLOR: Utils.DEFAULT_ASPHALT_COLOR);
+//
+//        g.fillPolygon(getAsphaltOutline());
+//
+//        g.setColor(new Color(0, 0, 0, 0));
+//        g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
 
     protected void renderRoadLine(Graphics2D g, double offsetStart, double offsetEnd, Utils.DividerType type, Color color) {
@@ -79,13 +75,11 @@ abstract class RoadPiece {
         double stripeWidth = 1.4/8;
 
         if (type == Utils.DividerType.DASHED) {
-            g.setStroke(GuiHelper.getCustomizedStroke((pixelsPerMeter / 8 + 1) + " " +
-                    (pixelsPerMeter * 3) + " " + (pixelsPerMeter * 9)));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, pixelsPerMeter * 9));
         } else if (type == Utils.DividerType.QUICK_DASHED) {
-            g.setStroke(GuiHelper.getCustomizedStroke((pixelsPerMeter / 8 + 1) + " " +
-                    (pixelsPerMeter * 1) + " " + (pixelsPerMeter * 3)));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 1, pixelsPerMeter * 3));
         } else if (type == Utils.DividerType.SOLID) {
-            g.setStroke(GuiHelper.getCustomizedStroke(((int) (pixelsPerMeter / 8 + 1.5)) + ""));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0));
         } else if (type == Utils.DividerType.DOUBLE_SOLID) {
             renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, color);
             renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, color);
@@ -123,7 +117,7 @@ abstract class RoadPiece {
                     offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_LEFT, color);
             return;
         }
-        Way alignment = Utils.getParallel(_parent.getAlignment(), offsetStart, offsetEnd, false, _parent.startAngle, _parent.endAngle);
+        Way alignment = Utils.getParallel(_parent.getAlignment(), offsetStart, offsetEnd, false, _parent.otherStartAngle, _parent.otherEndAngle);
         int[] xPoints = new int[alignment.getNodesCount()];
         int[] yPoints = new int[alignment.getNodesCount()];
         for (int i = 0; i < alignment.getNodesCount(); i++) {
@@ -163,30 +157,39 @@ abstract class RoadPiece {
         return Double.parseDouble(value);
     }
 
-    protected Polygon getAsphaltOutline() {
-        double widthStart = getWidth(true);
-        double widthEnd = getWidth(false);
-
-        Way left = Utils.getParallel(_parent.getAlignment(), _offsetStart + (widthStart / 2.0), _offsetEnd + (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
-        Way right = Utils.getParallel(_parent.getAlignment(), _offsetStart - (widthStart / 2.0), _offsetEnd - (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
-
-        int[] xPoints = new int[left.getNodesCount() + right.getNodesCount() + 1];
-        int[] yPoints = new int[xPoints.length];
-
-        for (int i = 0; i < left.getNodesCount(); i++) {
-            xPoints[i] = (int) (_mv.getPoint(left.getNode(i).getCoor()).getX() + 0.5);
-            yPoints[i] = (int) (_mv.getPoint(left.getNode(i).getCoor()).getY() + 0.5);
+    private Stroke getCustomStroke(double width, double metersDash, double metersGap) {
+        if (metersGap <= 0.01 && metersGap >= -0.01) {
+            return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1);
+        } else {
+            return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1,
+                    new float[] {(float) metersDash, (float) metersGap}, 0.0F);
         }
-
-        for (int i = 0; i < right.getNodesCount(); i++) {
-            xPoints[i+left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount()-i-1).getCoor()).getX() + 0.5);
-            yPoints[i+left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount()-i-1).getCoor()).getY() + 0.5);
-        }
-
-        xPoints[left.getNodesCount()*2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getX() + 0.5);
-        yPoints[left.getNodesCount()*2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getY() + 0.5);
-        return new Polygon(xPoints, yPoints, xPoints.length);
     }
+
+//    protected Polygon getAsphaltOutline() {
+//        double widthStart = getWidth(true);
+//        double widthEnd = getWidth(false);
+//
+//        Way left = Utils.getParallel(_parent.getAlignment(), _offsetStart + (widthStart / 2.0), _offsetEnd + (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
+//        Way right = Utils.getParallel(_parent.getAlignment(), _offsetStart - (widthStart / 2.0), _offsetEnd - (widthEnd / 2.0), false, _parent.startAngle, _parent.endAngle);
+//
+//        int[] xPoints = new int[left.getNodesCount() + right.getNodesCount() + 1];
+//        int[] yPoints = new int[xPoints.length];
+//
+//        for (int i = 0; i < left.getNodesCount(); i++) {
+//            xPoints[i] = (int) (_mv.getPoint(left.getNode(i).getCoor()).getX() + 0.5);
+//            yPoints[i] = (int) (_mv.getPoint(left.getNode(i).getCoor()).getY() + 0.5);
+//        }
+//
+//        for (int i = 0; i < right.getNodesCount(); i++) {
+//            xPoints[i+left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount()-i-1).getCoor()).getX() + 0.5);
+//            yPoints[i+left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount()-i-1).getCoor()).getY() + 0.5);
+//        }
+//
+//        xPoints[left.getNodesCount()*2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getX() + 0.5);
+//        yPoints[left.getNodesCount()*2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getY() + 0.5);
+//        return new Polygon(xPoints, yPoints, xPoints.length);
+//    }
 
 
     // <editor-fold desc="Mouse Listeners">

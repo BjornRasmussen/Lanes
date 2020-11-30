@@ -33,16 +33,14 @@ import org.openstreetmap.josm.gui.layer.MapViewPaintable;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 import org.openstreetmap.josm.tools.Shortcut;
 
-import javax.swing.*;
-
 public class LaneMappingMode extends MapMode implements MouseListener, MouseMotionListener,
         MapViewPaintable, UndoRedoHandler.CommandQueuePreciseListener {
 
 //    private List<TagWithValues> tagsForRendering = null;
-    private List<RoadSegmentRenderer> roadSegments = null;
+    private List<MarkedRoadRenderer> roadSegments = null;
     private MapView _mv;
 
-    public Map<Long, RoadSegmentRenderer> wayIdToRSR = new HashMap<>();
+    public Map<Long, MarkedRoadRenderer> wayIdToRSR = new HashMap<>();
 
     public LaneMappingMode(MapFrame mapFrame) {
         super(tr("Lane Editing"), "laneconnectivity.png", tr("Activate lane editing mode"),
@@ -68,7 +66,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
 
         // Render each road
-        for (RoadSegmentRenderer r : roadSegments) {
+        for (MarkedRoadRenderer r : roadSegments) {
             if (wayShouldBeRendered(bounds, r.getWay())) r.render(g);
         }
 
@@ -149,14 +147,19 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 //        return output;
 //    }
 
-    private List<RoadSegmentRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
+    private List<MarkedRoadRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
         wayIdToRSR = new HashMap<>();
-        List<RoadSegmentRenderer> output = new ArrayList<>();
+        List<MarkedRoadRenderer> output = new ArrayList<>();
         for (Way w : ways) {
-            RoadSegmentRenderer rsr = new RoadSegmentRenderer(w, mv, this);
-            wayIdToRSR.put(w.getId(), rsr);
-            output.add(rsr);
+            MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, this);
+            wayIdToRSR.put(w.getId(), mrr);
+            output.add(mrr);
         }
+
+        for (MarkedRoadRenderer mrr : output) {
+            mrr.updateAlignment(); // updates alignment based on nearby ways.
+        }
+
         return output;
     }
 
@@ -244,10 +247,10 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     public void mouseMoved(MouseEvent e) {}
     // </editor-fold>
 
-    private RoadSegmentRenderer getShortestSegmentMouseEvent(MouseEvent e) {
-        RoadSegmentRenderer min = null;
+    private MarkedRoadRenderer getShortestSegmentMouseEvent(MouseEvent e) {
+        MarkedRoadRenderer min = null;
         if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
-        for (RoadSegmentRenderer r : roadSegments) {
+        for (MarkedRoadRenderer r : roadSegments) {
             if (r.mouseEventIsInside(e) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
         }
         return min;

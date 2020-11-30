@@ -14,7 +14,7 @@ public class Lane extends RoadPiece {
 
     private String change = null;
 
-    public Lane(int direction, int position, MapView mv, RoadSegmentRenderer parent) {
+    public Lane(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         super(direction, position, mv, parent);
     }
 
@@ -216,7 +216,7 @@ public class Lane extends RoadPiece {
 
             int numDrawn = 0;
             double distSoFar = 0;
-            Way lanePos = Utils.getParallel(_parent.getAlignment(), _offsetStart, _offsetEnd, false, _parent.startAngle, _parent.endAngle);
+            Way lanePos = Utils.getParallel(_parent.getAlignment(), _offsetStart, _offsetEnd, false, _parent.otherStartAngle, _parent.otherEndAngle);
             for (int i = 0; i < lanePos.getNodesCount() - 1; i++) {
                 double distThisTime = lanePos.getNode(i).getCoor().greatCircleDistance(lanePos.getNode(i + 1).getCoor());
                 double angle = lanePos.getNode(i).getCoor().bearing(lanePos.getNode(i + 1).getCoor());

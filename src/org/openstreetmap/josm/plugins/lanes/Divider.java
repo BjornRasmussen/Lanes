@@ -1,9 +1,5 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import org.openstreetmap.josm.command.Command;
-import org.openstreetmap.josm.command.SequenceCommand;
-import org.openstreetmap.josm.data.UndoRedoHandler;
-import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.tools.ImageProvider;
 
@@ -13,15 +9,12 @@ import javax.swing.border.StrokeBorder;
 import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.io.IOException;
 import java.util.List;
-
-import static org.openstreetmap.josm.tools.I18n.tr;
 
 public class Divider extends RoadPiece {
     Utils.DividerType _type = null;
 
-    public Divider(int direction, int position, MapView mv, RoadSegmentRenderer parent) {
+    public Divider(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         super(direction, position, mv, parent);
     }
 

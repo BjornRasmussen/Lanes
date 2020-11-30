@@ -7,6 +7,7 @@ import org.openstreetmap.josm.tools.ImageProvider;
 import org.openstreetmap.josm.tools.RightAndLefthandTraffic;
 
 import javax.imageio.ImageIO;
+import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -62,19 +63,6 @@ public class Utils {
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Finding Parallel Ways">
 
-//    public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset, Node beforeStart, Node afterEnd) {
-//        List<Node> nodes = way.getNodes();
-//        if (beforeStart != null) nodes.add(0, beforeStart);
-//        if (afterEnd != null) nodes.add(afterEnd);
-//        way.setNodes(nodes);
-//        Way parallel = getParallel(way, offsetStart, offsetEnd, useAngleOffset);
-//        List<Node> nodesNew = parallel.getNodes();
-//        if (beforeStart != null) nodesNew.remove(0);
-//        if (afterEnd != null) nodesNew.remove(nodesNew.size()-1);
-//        parallel.setNodes(nodesNew);
-//        return parallel;
-//    }
-
     public static Way getParallel(Way way, double offsetStart, double offsetEnd, boolean useAngleOffset, double angStart, double angEnd) {
         LatLon[] points = new LatLon[way.getNodesCount()];
         double[] distanceIntoWay = new double[way.getNodesCount()];
@@ -102,45 +90,37 @@ public class Utils {
         } catch (NullPointerException e) {
             return way;
         }
-//        double angleWithoutOtherWay = (angle - (Math.PI / 2.0) + angleOffset) % (2*Math.PI);
-//        double angleOfOtherWay = (angStart + (Math.PI / 2.0)) % (2*Math.PI);
-//        double ave = (angleOfOtherWay+angleWithoutOtherWay) / 2.0;
-//        if (Math.abs(angleOfOtherWay-angleWithoutOtherWay) > Math.PI) {
-//            ave = (ave-2*Math.PI) % (2*Math.PI);
-//        }
-//        double angleAveFromWithoutOtherWay = Math.abs(ave - angleWithoutOtherWay);
-//        offsetStart = offsetStart / Math.cos(angleAveFromWithoutOtherWay);
-        output[0] = getLatLonRelative(points[0], angle-(Math.PI/2) + angleOffset, offsetStart);
 
+        double angleWithoutOtherWay = (angle - (Math.PI / 2.0) + angleOffset) % (2*Math.PI);
+        output[0] = getLatLonRelative(points[0], angleWithoutOtherWay, offsetStart);
 
-    // Deal with all other nodes
-    for (int i = 1; i < points.length - 1; i++) {
-        double angleToPrevPoint;
-        double angleToNextPoint;
-        try {
-            // If points are at same location, return the way, since getting a parallel way would be hard.
-            angleToPrevPoint = points[i].bearing(points[i - 1]);
-            angleToNextPoint = points[i].bearing(points[i + 1]);
-        } catch (NullPointerException e) {
-            return way;
+        // Deal with all other nodes
+        for (int i = 1; i < points.length - 1; i++) {
+            double angleToPrevPoint;
+            double angleToNextPoint;
+            try {
+                // If points are at same location, return the way, since getting a parallel way would be hard.
+                angleToPrevPoint = points[i].bearing(points[i - 1]);
+                angleToNextPoint = points[i].bearing(points[i + 1]);
+            } catch (NullPointerException e) {
+                return way;
+            }
+            double angleBetween = (angleToNextPoint + angleToPrevPoint) / 2;
+            if (angleToNextPoint < angleToPrevPoint) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);
+
+            double amountThrough = distanceIntoWay[i]/distanceOfWay;
+            double offsetAtNode = offsetStart * (1 - amountThrough) + offsetEnd * amountThrough;
+
+            double anglePrevToNormal = (angleBetween - angleToNextPoint) % (2 * Math.PI);
+
+            double offset = offsetAtNode / Math.abs(Math.sin(anglePrevToNormal));
+
+            output[i] = getLatLonRelative(points[i], angleBetween + angleOffset, offset);
         }
-        double angleBetween = (angleToNextPoint + angleToPrevPoint) / 2;
-        if (angleToNextPoint < angleToPrevPoint) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);
-
-        double amountThrough = distanceIntoWay[i]/distanceOfWay;
-        double offsetAtNode = offsetStart * (1 - amountThrough) + offsetEnd * amountThrough;
-
-        double anglePrevToNormal = (angleBetween - angleToNextPoint) % (2 * Math.PI);
-
-        double offset = offsetAtNode / Math.abs(Math.sin(anglePrevToNormal));
-
-        output[i] = getLatLonRelative(points[i], angleBetween + angleOffset, offset);
-    }
 
         // Deal with last node
         double angleToPrev = points[points.length - 1].bearing(points[points.length - 2]);
         output[points.length - 1] = getLatLonRelative(points[points.length - 1], angleToPrev + (Math.PI / 2.0) + angleOffset, offsetEnd);
-
 
         // Convert to way format and return
         List<Node> outputNodes = new ArrayList<>();

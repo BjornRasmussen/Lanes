@@ -152,7 +152,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         List<MarkedRoadRenderer> output = new ArrayList<>();
         for (Way w : ways) {
             MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, this);
-            wayIdToRSR.put(w.getId(), mrr);
+            wayIdToRSR.put(w.getUniqueId(), mrr);
             output.add(mrr);
         }
 

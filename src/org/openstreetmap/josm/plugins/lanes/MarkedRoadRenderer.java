@@ -9,6 +9,7 @@ import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 
+import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.util.*;
@@ -176,7 +177,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
         if (tags.containsKey("lanes:forward") && numLanesForward == -1) {
             numLanesForward = Integer.parseInt(tags.get("lanes:forward"));
         }
-        if (tags.containsKey("lanes") && _way.isOneway() == 1 && numLanesForward == -1) {
+        if (tags.containsKey("lanes") && Utils.isOneway(_way) && numLanesForward == -1) {
             numLanesForward = Integer.parseInt(tags.get("lanes"));
         }
         if (tags.containsKey("lanes:backward") && numLanesBackward == -1) {
@@ -188,7 +189,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
         if (numLanesBothWays == -1) numLanesBothWays = 0; // Assume no centre lane.
 
-        if (tags.containsKey("lanes") && _way.isOneway() == 0) {
+        if (tags.containsKey("lanes") && !Utils.isOneway(_way)) {
             int lanes = Integer.parseInt(tags.get("lanes")) - numLanesBothWays;
             if (numLanesForward == -1 && numLanesBackward == -1) {
                 numLanesForward = lanes-lanes/2;
@@ -253,7 +254,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
         Map<String, String> tags = _way.getInterestingTags();
         int numLanes = -1;
         for (String key : tags.keySet()) {
-            if (!key.contains("note") && (direction == 1 ? ((key.endsWith(":lanes") && _way.isOneway() == 1) || key.endsWith(":lanes:forward")) :
+            if (!key.contains("note") && (direction == 1 ? ((key.endsWith(":lanes") && Utils.isOneway(_way)) || key.endsWith(":lanes:forward")) :
                     direction == 0 ? key.endsWith(":lanes:both_ways") : key.endsWith(":lanes:backward"))) {
 
                 // This runs if the tag being analyzed is a lane tag applying to this direction.
@@ -429,9 +430,9 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
     private String getPlacementTag(boolean start) {
         String output = null;
-        if (start && _way.hasTag("placement:start") && _way.isOneway() == 1) {
+        if (start && _way.hasTag("placement:start") && Utils.isOneway(_way)) {
             output = _way.get("placement:start") + "f";
-        } else if (!start && _way.hasTag("placement:end") && _way.isOneway() == 1) {
+        } else if (!start && _way.hasTag("placement:end") && Utils.isOneway(_way)) {
             output = _way.get("placement:end") + "f";
         } else if (start && _way.hasTag("placement:forward:start")) {
             output = _way.get("placement:forward:start") + "f";
@@ -445,7 +446,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
             output = _way.get("placement:both_ways:start") + "m";
         } else if (!start && _way.hasTag("placement:both_ways:end")) {
             output = _way.get("placement:both_ways:end") + "m";
-        } else if (_way.hasTag("placement") && _way.isOneway() == 1) {
+        } else if (_way.hasTag("placement") && Utils.isOneway(_way)) {
             output = _way.get("placement") + "f";
         } else if (_way.hasTag("placement:forward")) {
             output = _way.get("placement:forward") + "f";
@@ -546,12 +547,6 @@ public class MarkedRoadRenderer implements RoadRenderer {
         return start ? otherStartAngle : otherEndAngle;
     }
 
-    public double getThisAngle(boolean start) {
-        Node first = start ? _alignment.getNode(0) : _alignment.getNode(_alignment.getNodesCount() - 1);
-        Node second = start ? _alignment.getNode(1) : _alignment.getNode(_alignment.getNodesCount() - 2);
-        return first.getCoor().bearing(second.getCoor());
-    }
-
     private double calculateOtherAngle(boolean start) {
         Node pivot = _way.getNode(start ? 0 : _way.getNodesCount()-1);
         int numValidWays = 0;
@@ -559,29 +554,45 @@ public class MarkedRoadRenderer implements RoadRenderer {
         Way otherWay = null;
         boolean otherWayStartsHere = false;
         for (Way w : pivot.getParentWays()) {
-            if (w.equals(_way) || !_parent.wayIdToRSR.containsKey(w.getId())) continue;
-            otherWay = _parent.wayIdToRSR.get(w.getId())._alignment;
+            if (w.getUniqueId() == _way.getUniqueId() || !_parent.wayIdToRSR.containsKey(w.getUniqueId())) continue;
+            otherWay = _parent.wayIdToRSR.get(w.getUniqueId())._alignment;
             numValidWays++;
+//            JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be valid");
             // Check to ensure that pivot is only part of w at one of the endpoints.
             int numConnections = 0;
             for (int i = 0; i < w.getNodesCount(); i++) {
-                if (!w.getNode(i).equals(pivot)) continue;
+                if (w.getNode(i).getUniqueId() != pivot.getUniqueId()) continue;
                 numConnections++;
                 if (i!=0 && i!=w.getNodesCount()-1) {
+//                    JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be not valid node pos");
                     somethingIsNotValid = true;
                 }
                 otherWayStartsHere = i==0;
             }
-            if (numConnections > 1) somethingIsNotValid = true;
+            if (numConnections > 1) {
+                somethingIsNotValid = true;
+//                JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() +
+//                        " to be not valid " + numConnections + " connections");
+            }
         }
-        if (numValidWays != 1) somethingIsNotValid = true;
+        if (numValidWays != 1) {
+            somethingIsNotValid = true;
+//            JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found too many other ways (" + numValidWays + ")");
+
+        }
         if (somethingIsNotValid) {
-            return (getThisAngle(start)+Math.PI) % (2*Math.PI);
+            return (getThisAngle(start) + Math.PI) % (2*Math.PI);
         } else {
             Node secondToLast = otherWayStartsHere ? otherWay.getNode(1) : otherWay.getNode(otherWay.getNodesCount() - 2);
             Node last = otherWayStartsHere ? otherWay.getNode(0) : otherWay.getNode(otherWay.getNodesCount() - 1);
-            return secondToLast.getCoor().bearing(last.getCoor());
+            return last.getCoor().bearing(secondToLast.getCoor());
         }
+    }
+
+    public double getThisAngle(boolean start) {
+        Node first = start ? _alignment.getNode(0) : _alignment.getNode(_alignment.getNodesCount() - 1);
+        Node second = start ? _alignment.getNode(1) : _alignment.getNode(_alignment.getNodesCount() - 2);
+        return first.getCoor().bearing(second.getCoor());
     }
 
     // </editor-fold>
@@ -639,7 +650,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
         }
 
         if (forwardIsAllSame && !(backwardIsAllSame && forwardChange.equals(backwardChange)) && !forwardChange.equals("")) {
-            addTag(_way, "change" + (_way.isOneway() == 1 ? "" : ":forward"), forwardChange, cmds);
+            addTag(_way, "change" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange, cmds);
 
         }
 
@@ -648,7 +659,7 @@ public class MarkedRoadRenderer implements RoadRenderer {
         }
 
         if (!forwardIsAllSame && !forwardChange.equals("")) {
-            addTag(_way, "change:lanes" + (_way.isOneway() == 1 ? "" : ":forward"), forwardChange, cmds);
+            addTag(_way, "change:lanes" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange, cmds);
         }
 
         if (!backwardIsAllSame && !backwardChange.equals("")) {

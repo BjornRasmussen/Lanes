@@ -60,7 +60,7 @@ public class Lane extends RoadPiece {
                 if (_way.hasTag("change:lanes:forward")) {
                     output = splitPos(_way.get("change:lanes:forward"), _position);
                 }
-                if (_way.hasTag("change:lanes") && _way.isOneway() == 1) {
+                if (_way.hasTag("change:lanes") && Utils.isOneway(_way)) {
                     output = splitPos(_way.get("change:lanes"), _position);
                 }
                 if (_way.hasTag("change:forward")) {
@@ -111,7 +111,7 @@ public class Lane extends RoadPiece {
                 if (_way.hasTag("turn:lanes:forward")) {
                     return splitPos(_way.get("turn:lanes:forward"), _position);
                 }
-                if (_way.hasTag("turn:lanes") && _way.isOneway() == 1) {
+                if (_way.hasTag("turn:lanes") && Utils.isOneway(_way)) {
                     return splitPos(_way.get("turn:lanes"), _position);
                 }
                 if (_way.hasTag("turn:forward")) {
@@ -158,13 +158,13 @@ public class Lane extends RoadPiece {
                 output = splitPos(_way.get("width:lanes:forward"), _position);
             }
 
-            if (output.equals("") && start && _way.hasTag("width:lanes:start") && _way.isOneway() == 1) {
+            if (output.equals("") && start && _way.hasTag("width:lanes:start") && Utils.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes:start"), _position);
             }
-            if (output.equals("") && !start && _way.hasTag("width:lanes:end") && _way.isOneway() == 1) {
+            if (output.equals("") && !start && _way.hasTag("width:lanes:end") && Utils.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes:end"), _position);
             }
-            if (output.equals("") && _way.hasTag("width:lanes") && _way.isOneway() == 1) {
+            if (output.equals("") && _way.hasTag("width:lanes") && Utils.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes"), _position);
             }
         } else if (_direction == -1) {

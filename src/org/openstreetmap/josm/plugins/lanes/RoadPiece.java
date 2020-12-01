@@ -75,11 +75,11 @@ abstract class RoadPiece {
         double stripeWidth = 1.4/8;
 
         if (type == Utils.DividerType.DASHED) {
-            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, pixelsPerMeter * 9));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, pixelsPerMeter * 9, 0));
         } else if (type == Utils.DividerType.QUICK_DASHED) {
-            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 1, pixelsPerMeter * 3));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 1, pixelsPerMeter * 3, pixelsPerMeter*3));
         } else if (type == Utils.DividerType.SOLID) {
-            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0));
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0, 0));
         } else if (type == Utils.DividerType.DOUBLE_SOLID) {
             renderRoadLine(g, offsetStart + stripeWidth, offsetEnd + stripeWidth, Utils.DividerType.SOLID, color);
             renderRoadLine(g, offsetStart - stripeWidth, offsetEnd - stripeWidth, Utils.DividerType.SOLID, color);
@@ -157,12 +157,12 @@ abstract class RoadPiece {
         return Double.parseDouble(value);
     }
 
-    private Stroke getCustomStroke(double width, double metersDash, double metersGap) {
+    private Stroke getCustomStroke(double width, double metersDash, double metersGap, double offset) {
         if (metersGap <= 0.01 && metersGap >= -0.01) {
             return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1);
         } else {
             return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1,
-                    new float[] {(float) metersDash, (float) metersGap}, 0.0F);
+                    new float[] {(float) metersDash, (float) metersGap}, (float) offset);
         }
     }
 

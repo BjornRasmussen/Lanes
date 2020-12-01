@@ -91,8 +91,19 @@ public class Utils {
             return way;
         }
 
-        double angleWithoutOtherWay = (angle - (Math.PI / 2.0) + angleOffset) % (2*Math.PI);
-        output[0] = getLatLonRelative(points[0], angleWithoutOtherWay, offsetStart);
+        double angleWithoutOtherWay = (angle - (Math.PI / 2.0)) % (2*Math.PI);
+        double angleToUse = angleWithoutOtherWay;
+        double multiplierToUse = 1.0;
+
+        if (!Double.isNaN(angStart)) {
+//            double angleWithoutOtherWayAndNoOffset = (angle - (Math.PI / 2)) % (2 * Math.PI);
+            double angleOfOtherWay = ((angStart + (Math.PI / 2)) % (Math.PI * 2));
+            angleToUse = getAngleAverage(angleWithoutOtherWay, angleOfOtherWay);
+
+            multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay));
+        }
+
+        output[0] = getLatLonRelative(points[0], angleToUse, offsetStart*multiplierToUse);
 
         // Deal with all other nodes
         for (int i = 1; i < points.length - 1; i++) {
@@ -120,7 +131,20 @@ public class Utils {
 
         // Deal with last node
         double angleToPrev = points[points.length - 1].bearing(points[points.length - 2]);
-        output[points.length - 1] = getLatLonRelative(points[points.length - 1], angleToPrev + (Math.PI / 2.0) + angleOffset, offsetEnd);
+
+        angleWithoutOtherWay = (angleToPrev + (Math.PI / 2.0)) % (2*Math.PI);
+        angleToUse = angleWithoutOtherWay + angleOffset;
+        multiplierToUse = 1.0;
+
+        if (!Double.isNaN(angEnd)) {
+            double angleOfOtherWay = ((angEnd - (Math.PI / 2)) % (Math.PI * 2));
+            angleToUse = getAngleAverage(angleWithoutOtherWay + angleOffset, angleOfOtherWay);
+            multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay - angleOffset));
+        }
+
+        output[points.length - 1] = getLatLonRelative(points[points.length - 1], angleToUse, offsetEnd*multiplierToUse);
+
+
 
         // Convert to way format and return
         List<Node> outputNodes = new ArrayList<>();
@@ -130,6 +154,14 @@ public class Utils {
         outputWay.setNodes(outputNodes);
 
         return outputWay;
+    }
+
+    private static double getAngleAverage(double a, double b) {
+        a = a % (2*Math.PI);
+        b = b % (2*Math.PI);
+        double angleBetween = (a + b) / 2;
+        if (Math.abs(a-b) > Math.PI) angleBetween = (angleBetween + Math.PI) % (Math.PI * 2.0);
+        return angleBetween;
     }
 
     public static LatLon getLatLonRelative(LatLon from, double bearing, double numMeters) {
@@ -165,5 +197,9 @@ public class Utils {
         } catch (IOException e) {
             return new HashMap<>();
         }
+    }
+
+    public static boolean isOneway(Way w) {
+        return w.isOneway() == 1 || w.hasTag("junction", "roundabout");
     }
 }

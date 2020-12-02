@@ -69,7 +69,6 @@ public class Divider extends RoadPiece {
 
     @Override
     public void render(Graphics2D g) {
-        renderAsphalt(g);
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
             renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);

@@ -96,11 +96,12 @@ public class Utils {
         double multiplierToUse = 1.0;
 
         if (!Double.isNaN(angStart)) {
-//            double angleWithoutOtherWayAndNoOffset = (angle - (Math.PI / 2)) % (2 * Math.PI);
             double angleOfOtherWay = ((angStart + (Math.PI / 2)) % (Math.PI * 2));
-            angleToUse = getAngleAverage(angleWithoutOtherWay, angleOfOtherWay);
+            if (anglesAreWithinAngle(angleOfOtherWay, angleWithoutOtherWay, 1.8)) {
+                angleToUse = getAngleAverage(angleWithoutOtherWay, angleOfOtherWay);
 
-            multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay));
+                multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay));
+            }
         }
 
         output[0] = getLatLonRelative(points[0], angleToUse, offsetStart*multiplierToUse);
@@ -138,8 +139,10 @@ public class Utils {
 
         if (!Double.isNaN(angEnd)) {
             double angleOfOtherWay = ((angEnd - (Math.PI / 2)) % (Math.PI * 2));
-            angleToUse = getAngleAverage(angleWithoutOtherWay + angleOffset, angleOfOtherWay);
-            multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay - angleOffset));
+            if (anglesAreWithinAngle(angleOfOtherWay, angleWithoutOtherWay + angleOffset, 1.8)) {
+                angleToUse = getAngleAverage(angleWithoutOtherWay + angleOffset, angleOfOtherWay);
+                multiplierToUse = 1 / Math.cos(Math.abs(angleToUse - angleWithoutOtherWay - angleOffset));
+            }
         }
 
         output[points.length - 1] = getLatLonRelative(points[points.length - 1], angleToUse, offsetEnd*multiplierToUse);
@@ -164,6 +167,12 @@ public class Utils {
         return angleBetween;
     }
 
+    private static boolean anglesAreWithinAngle(double a, double b, double maxDiff) {
+        a = a % (2*Math.PI);
+        b = b % (2*Math.PI);
+        return (Math.abs(a-b) < maxDiff) || (Math.abs(a+2*Math.PI-b) < maxDiff) || (Math.abs(a-2*Math.PI-b) < maxDiff);
+    }
+
     public static LatLon getLatLonRelative(LatLon from, double bearing, double numMeters) {
         double metersPerDegreeLat = 111319.5;
         double metersPerDegreeLon = metersPerDegreeLat * Math.cos(from.getY() / 180.0 * Math.PI);
@@ -177,6 +186,63 @@ public class Utils {
     }
 
     // </editor-fold>
+
+    public static Way getSubPart(Way w, double startMeters, double endMeters) {
+        List<Node> newNodes = new ArrayList<>();
+        double distSoFar = 0;
+        int nextNode = -1;
+        if (startMeters <= 0.01) {
+            newNodes.add(w.getNode(0));
+            nextNode = 1;
+        } else {
+            for (int i = 1; i < w.getNodesCount(); i++) {
+                // Look for start up to the node at pos i, including node at pos i.
+                double distThis = w.getNode(i - 1).getCoor().greatCircleDistance(w.getNode(i).getCoor());
+                distSoFar += distThis;
+
+                if (startMeters < distSoFar-0.01) {
+                    // Find place and set next node as i
+                    double distBack = distSoFar-startMeters;
+                    newNodes.add(new Node(new LatLon(distBack/distThis*w.getNode(i-1).lat() + (1-distBack/distThis)*w.getNode(i).lat(),
+                            distBack/distThis*w.getNode(i-1).lon() + (1-distBack/distThis)*w.getNode(i).lon())));
+                    nextNode = i;
+                    distSoFar -= distThis;
+                    break;
+                } else if (startMeters < distSoFar+0.01) {
+                    // add node i and set next as i+1.
+                    newNodes.add(w.getNode(i));
+                    nextNode = i+1;
+                    break;
+                }
+            }
+        }
+
+        for (int i = nextNode; i < w.getNodesCount(); i++) {
+            // Look for start up to the node at pos i, including node at pos i.
+            double distThis = w.getNode(i - 1).getCoor().greatCircleDistance(w.getNode(i).getCoor());
+            distSoFar += distThis;
+            if (endMeters < distSoFar-0.01) {
+                // Find place and set next node as i
+                double distBack = distSoFar-endMeters;
+                newNodes.add(new Node(new LatLon(distBack/distThis*w.getNode(i-1).lat() + (1-distBack/distThis)*w.getNode(i).lat(),
+                        distBack/distThis*w.getNode(i-1).lon() + (1-distBack/distThis)*w.getNode(i).lon())));
+                break;
+            } else if (endMeters < distSoFar+0.01) {
+                // add node i and set next as i+1.
+                newNodes.add(w.getNode(i));
+                break;
+            }
+
+            newNodes.add(w.getNode(i));
+        }
+        if (newNodes.size() >= 2) {
+            Way output = new Way();
+            output.setNodes(newNodes);
+            return output;
+        } else {
+            return null;
+        }
+    }
 
     public static boolean isRightHand(Way location) {
         return RightAndLefthandTraffic.isRightHandTraffic(location.getNode(0).getCoor());

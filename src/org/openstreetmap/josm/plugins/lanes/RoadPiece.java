@@ -7,6 +7,8 @@ import org.openstreetmap.josm.gui.util.GuiHelper;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.List;
 
 abstract class RoadPiece {
     protected int _direction;
@@ -61,15 +63,6 @@ abstract class RoadPiece {
         _offsetEnd = offsetEnd;
     }
 
-    protected void renderAsphalt(Graphics2D g) {
-//        g.setColor(_selected ? Utils.DEFAULT_SELECTED_ASPHALT_COLOR: Utils.DEFAULT_ASPHALT_COLOR);
-//
-//        g.fillPolygon(getAsphaltOutline());
-//
-//        g.setColor(new Color(0, 0, 0, 0));
-//        g.setStroke(GuiHelper.getCustomizedStroke("0"));
-    }
-
     protected void renderRoadLine(Graphics2D g, double offsetStart, double offsetEnd, Utils.DividerType type, Color color) {
         double pixelsPerMeter = 100.0 / _mv.getDist100Pixel();
         double stripeWidth = 1.4/8;
@@ -117,16 +110,26 @@ abstract class RoadPiece {
                     offsetEnd - ((getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER) / 2), Utils.DividerType.DASHED_FOR_LEFT, color);
             return;
         }
-        Way alignment = Utils.getParallel(_parent.getAlignment(), offsetStart, offsetEnd, false, _parent.otherStartAngle, _parent.otherEndAngle);
-        int[] xPoints = new int[alignment.getNodesCount()];
-        int[] yPoints = new int[alignment.getNodesCount()];
-        for (int i = 0; i < alignment.getNodesCount(); i++) {
-            xPoints[i] = (int) (_mv.getPoint(alignment.getNode(i).getCoor()).getX() + 0.5);
-            yPoints[i] = (int) (_mv.getPoint(alignment.getNode(i).getCoor()).getY() + 0.5);
-        }
-
+        List<Way> parentAlignments = _parent.getAlignments();
         g.setColor(color);
-        g.drawPolyline(xPoints, yPoints, xPoints.length);
+
+        for (int i = 0; i < parentAlignments.size(); i++) {
+            double swt = (_parent.startPoints.get(i)/_parent.getAlignment().getLength());
+            double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
+            double ewt = (_parent.endPoints.get(i)/_parent.getAlignment().getLength());
+            double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
+            Way alignment = Utils.getParallel(parentAlignments.get(i), startOffset, endOffset, false,
+                    i==0 ? _parent.otherStartAngle : Double.NaN, i==parentAlignments.size()-1 ? _parent.otherEndAngle : Double.NaN);
+
+            int[] xPoints = new int[alignment.getNodesCount()];
+            int[] yPoints = new int[alignment.getNodesCount()];
+            for (int j = 0; j < alignment.getNodesCount(); j++) {
+                xPoints[j] = (int) (_mv.getPoint(alignment.getNode(j).getCoor()).getX() + 0.5);
+                yPoints[j] = (int) (_mv.getPoint(alignment.getNode(j).getCoor()).getY() + 0.5);
+            }
+
+            g.drawPolyline(xPoints, yPoints, xPoints.length);
+        }
 
         // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
         g.setColor(new Color(0, 0, 0, 0));
@@ -144,7 +147,7 @@ abstract class RoadPiece {
             return 1000 * Double.parseDouble(value.substring(0, value.length()-3));
         } else if (value.endsWith(" mi")) {
             return 1609.344 * Double.parseDouble(value.substring(0, value.length()-3));
-        } else if (value.endsWith("\'")) {
+        } else if (value.endsWith("'")) {
             return 1 / 3.28084 * Double.parseDouble(value.substring(0, value.length()-1));
         } else if (value.endsWith("\"") && !value.contains("'")) {
             return 1 / 3.28084 / 12 * Double.parseDouble(value.substring(0, value.length()-1));

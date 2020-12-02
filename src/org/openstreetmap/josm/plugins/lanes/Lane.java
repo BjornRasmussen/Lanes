@@ -44,7 +44,6 @@ public class Lane extends RoadPiece {
 
     @Override
     void render(Graphics2D g) {
-        renderAsphalt(g);
         if (_direction == 0) {
             renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
         }
@@ -141,14 +140,14 @@ public class Lane extends RoadPiece {
                     return _way.get("turn");
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
         return null;
     }
 
     public String getWidthTag(boolean start) {
         String output = "";
         if (_direction == 1) {
-            if (output.equals("") && start && _way.hasTag("width:lanes:forward:start")) {
+            if (start && _way.hasTag("width:lanes:forward:start")) {
                 output = splitPos(_way.get("width:lanes:forward:start"), _position);
             }
             if (output.equals("") && !start && _way.hasTag("width:lanes:forward:end")) {
@@ -168,7 +167,7 @@ public class Lane extends RoadPiece {
                 output = splitPos(_way.get("width:lanes"), _position);
             }
         } else if (_direction == -1) {
-            if (output.equals("") && start && _way.hasTag("width:lanes:backward:start")) {
+            if (start && _way.hasTag("width:lanes:backward:start")) {
                 output = splitPos(_way.get("width:lanes:backward:start"), _position);
             }
             if (output.equals("") && !start && _way.hasTag("width:lanes:backward:end")) {
@@ -178,7 +177,7 @@ public class Lane extends RoadPiece {
                 output = splitPos(_way.get("width:lanes:backward"), _position);
             }
         } else if (_direction == 0) {
-            if (output.equals("") && start && _way.hasTag("width:lanes:both_ways:start")) {
+            if (start && _way.hasTag("width:lanes:both_ways:start")) {
                 output = splitPos(_way.get("width:lanes:both_ways:start"), _position);
             }
             if (output.equals("") && !start && _way.hasTag("width:lanes:both_ways:end")) {
@@ -214,46 +213,59 @@ public class Lane extends RoadPiece {
 
             if (turn == null) return;
 
-            int numDrawn = 0;
-            double distSoFar = 0;
-            Way lanePos = Utils.getParallel(_parent.getAlignment(), _offsetStart, _offsetEnd, false, _parent.otherStartAngle, _parent.otherEndAngle);
-            for (int i = 0; i < lanePos.getNodesCount() - 1; i++) {
-                double distThisTime = lanePos.getNode(i).getCoor().greatCircleDistance(lanePos.getNode(i + 1).getCoor());
-                double angle = lanePos.getNode(i).getCoor().bearing(lanePos.getNode(i + 1).getCoor());
-                if (_direction == -1) angle += Math.PI;
+            for (int h = 0; h < _parent.getAlignments().size(); h++) {
+                // This runs for each sub part of a road (each segment)
+                Way parentAlignment = _parent.getAlignments().get(h);
+                double swt = _parent.startPoints.get(h)/_parent.getAlignment().getLength();
+                double ewt = _parent.endPoints.get(h)/_parent.getAlignment().getLength();
+                double offsetStart = swt*_offsetEnd + (1-swt)*_offsetStart;
+                double offsetEnd = ewt*_offsetEnd + (1-ewt)*_offsetStart;
+                double widthStart = swt*getWidth(false) + (1-swt)*getWidth(true);
+                double widthEnd = ewt*getWidth(false) + (1-ewt)*getWidth(true);
 
-                if (_direction != 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn)) {
-                    double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
-                    double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
-                    LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
-                            lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
-                    Point point = _mv.getPoint(pos);
-                    double portionStart = (distSoFar + distIntoSegment) / _way.getLength();
-                    double width = getWidth(false) * portionStart + getWidth(true) * (1 - portionStart);
-                    drawTurnMarkingsAt(turn, g, point.x, point.y, width, angle);
-                    distSoFar -= distThisTime;
-                    i--;
-                    numDrawn++;
+                int numDrawn = 0;
+                double distSoFar = 0;
+                Way lanePos = Utils.getParallel(parentAlignment, offsetStart, offsetEnd, false,
+                        h==0 ? _parent.otherStartAngle : Double.NaN,
+                        h==_parent.getAlignments().size()-1 ? _parent.otherEndAngle : Double.NaN);
+                for (int i = 0; i < lanePos.getNodesCount() - 1; i++) {
+                    double distThisTime = lanePos.getNode(i).getCoor().greatCircleDistance(lanePos.getNode(i + 1).getCoor());
+                    double angle = lanePos.getNode(i).getCoor().bearing(lanePos.getNode(i + 1).getCoor());
+                    if (_direction == -1) angle += Math.PI;
+
+                    if (_direction != 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn)) {
+                        double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
+                        double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
+                        LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
+                                lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
+                        Point point = _mv.getPoint(pos);
+                        double portionStart = (distSoFar + distIntoSegment) / _way.getLength();
+                        double width = widthEnd* portionStart + widthStart * (1 - portionStart);
+                        drawTurnMarkingsAt(turn, g, point.x, point.y, width, angle);
+                        distSoFar -= distThisTime;
+                        i--;
+                        numDrawn++;
+                    }
+                    if (_direction == 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) &&
+                            distSoFar + distThisTime - Utils.DIST_TO_FIRST_TURN - (Utils.DIST_BETWEEN_TURNS * (numDrawn)) > 5) {
+                        double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
+                        double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
+                        double portionStart = (distSoFar + distIntoSegment) / _way.getLength();
+                        double width = widthEnd * portionStart + widthStart * (1 - portionStart) - Utils.RENDERING_WIDTH_DIVIDER * 2;
+                        LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
+                                lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
+                        LatLon posBack = Utils.getLatLonRelative(pos, angle + Math.PI, 0.67 * width);
+                        LatLon posFront = Utils.getLatLonRelative(pos, angle, 0.67 * width);
+                        Point pointBack = _mv.getPoint(posBack);
+                        Point pointFront = _mv.getPoint(posFront);
+                        drawTurnMarkingsAt(turn, g, pointBack.x, pointBack.y, width, angle);
+                        drawTurnMarkingsAt(turn, g, pointFront.x, pointFront.y, width, angle + Math.PI);
+                        distSoFar -= distThisTime;
+                        i--;
+                        numDrawn++;
+                    }
+                    distSoFar += distThisTime;
                 }
-                if (_direction == 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) &&
-                        distSoFar + distThisTime - Utils.DIST_TO_FIRST_TURN - (Utils.DIST_BETWEEN_TURNS * (numDrawn)) > 5) {
-                    double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
-                    double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
-                    double portionStart = (distSoFar + distIntoSegment) / _way.getLength();
-                    double width = getWidth(false) * portionStart + getWidth(true) * (1 - portionStart) - Utils.RENDERING_WIDTH_DIVIDER * 2;
-                    LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
-                            lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
-                    LatLon posBack = Utils.getLatLonRelative(pos, angle + Math.PI, 0.67 * width);
-                    LatLon posFront = Utils.getLatLonRelative(pos, angle, 0.67 * width);
-                    Point pointBack = _mv.getPoint(posBack);
-                    Point pointFront = _mv.getPoint(posFront);
-                    drawTurnMarkingsAt(turn, g, pointBack.x, pointBack.y, width, angle);
-                    drawTurnMarkingsAt(turn, g, pointFront.x, pointFront.y, width, angle + Math.PI);
-                    distSoFar -= distThisTime;
-                    i--;
-                    numDrawn++;
-                }
-                distSoFar += distThisTime;
             }
         } catch (Exception ignored) {} // Just don't render the turn markings if they can't be rendered.
     }
@@ -303,7 +315,7 @@ public class Lane extends RoadPiece {
         Graphics2D g = result.createGraphics();
 
         g.translate((newWidth - w) / 2, (newHeight - h) / 2);
-        g.rotate(angle, w / 2, h / 2);
+        g.rotate(angle, w / 2.0, h / 2.0);
         g.drawRenderedImage(image, null);
         g.dispose();
 

@@ -19,12 +19,15 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
+    List<Double> startPoints; // Measured in meters from start.
+    List<Double> endPoints; // Anything greater than or equal to way length means end.
+
     private final Way _way;
     private Way _alignment;
     private final MapView _mv;
 
     private Way _outline;
-    private Way _asphalt;
+    private List<Way> _asphalt;
 
     public static String selected = "";
 
@@ -51,11 +54,18 @@ public class MarkedRoadRenderer implements RoadRenderer {
         _way = w;
         _mv = mv;
         _parent = parent;
-//        try {
-            createRoadLayout();
-//        } catch (Exception e) {
-//            _isValid = false;
-//        }
+
+        // Set start/end segments.
+        startPoints = new ArrayList<>();
+        startPoints.add(0.0);
+        endPoints = new ArrayList<>();
+        endPoints.add(w.getLength() + 1);
+
+        try { createRoadLayout(); } catch (Exception e) { _isValid = false; }
+
+        endPoints = new ArrayList<>();
+        endPoints.add(_alignment.getLength());
+
     }
 
     @Override
@@ -63,6 +73,22 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
     @Override
     public Way getAlignment() { return _alignment; }
+
+    public List<Way> getAlignments() {
+        // Returns sub parts of alignment.
+        List<Way> output = new ArrayList<>();
+        for (int i = 0; i < startPoints.size(); i++) {
+            double start = Math.max(startPoints.get(i), 0);
+            double end = Math.min(endPoints.get(i), _alignment.getLength());
+
+            Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
+
+            if (alignmentPart != null) {
+                output.add(alignmentPart);
+            }
+        }
+        return output;
+    }
 
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
@@ -92,58 +118,74 @@ public class MarkedRoadRenderer implements RoadRenderer {
             g.setStroke(GuiHelper.getCustomizedStroke("0"));
             return;
         }
-
-        renderAsphalt(g);
-
-        List<RoadPiece> roadPieces = getRoadPieces(true);
-        for (RoadPiece roadPiece : roadPieces) {
-            roadPiece.render(g);
-        }
+        try {
+            renderAsphalt(g);
+            List<RoadPiece> roadPieces = getRoadPieces(true);
+            for (RoadPiece roadPiece : roadPieces) {
+                roadPiece.render(g);
+            }
+        } catch (Exception ignored) {} // Don't render roads that can't be rendered (due to crazy alignments or lanes that go from 0 to 1000 m wide in 10 m).
     }
 
 
     private void renderAsphalt(Graphics2D g) {
         g.setColor(Utils.DEFAULT_ASPHALT_COLOR);
 
-        g.fillPolygon(getAsphaltOutlinePixels());
+        for (Polygon p : getAsphaltOutlinePixels()) g.fillPolygon(p);
 
         g.setColor(new Color(0, 0, 0, 0));
         g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
 
-    private Polygon getAsphaltOutlinePixels() {
+    private List<Polygon> getAsphaltOutlinePixels() {
         if (_asphalt == null) _asphalt = getAsphaltOutlineCoords();
 
-        int[] xPoints = new int[_asphalt.getNodesCount()];
-        int[] yPoints = new int[xPoints.length];
+        List<Polygon> output = new ArrayList<>();
+        for (Way asphalt : _asphalt) {
+            int[] xPoints = new int[asphalt.getNodesCount()];
+            int[] yPoints = new int[xPoints.length];
 
-        for (int i = 0; i < _asphalt.getNodesCount(); i++) {
-            xPoints[i] = (int) (_mv.getPoint(_asphalt.getNode(i).getCoor()).getX() + 0.5);
-            yPoints[i] = (int) (_mv.getPoint(_asphalt.getNode(i).getCoor()).getY() + 0.5);
+            for (int i = 0; i < asphalt.getNodesCount(); i++) {
+                xPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getX() + 0.5);
+                yPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getY() + 0.5);
+            }
+
+            output.add(new Polygon(xPoints, yPoints, xPoints.length));
         }
-
-        return new Polygon(xPoints, yPoints, xPoints.length);
+        return output;
     }
 
-    private Way getAsphaltOutlineCoords() {
-        double widthStart = getWidth(true);
-        double widthEnd = getWidth(false);
+    private List<Way> getAsphaltOutlineCoords() {
+        List<Way> output = new ArrayList<>();
+        for (int i = 0; i < startPoints.size(); i++) {
+            double start = Math.max(startPoints.get(i), 0);
+            double end = Math.min(endPoints.get(i), _alignment.getLength());
 
-        Way left = Utils.getParallel(getAlignment(), _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
-                _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false, otherStartAngle, otherEndAngle);
-        Way right = Utils.getParallel(getAlignment(), _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
-                _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false, otherStartAngle, otherEndAngle);
+            Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
+            if (alignmentPart == null) {
+                // Most likely invalid bounds
+                return new ArrayList<>();
+            }
 
-        List<Node> points = new ArrayList<>();
+            Way left = Utils.getParallel(alignmentPart, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
+                    _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false,
+                    i==0 ? otherStartAngle : Double.NaN, i==startPoints.size()-1 ? otherEndAngle : Double.NaN);
+            Way right = Utils.getParallel(alignmentPart, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
+                    _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false,
+                    i==0 ? otherStartAngle : Double.NaN, i==startPoints.size()-1 ? otherEndAngle : Double.NaN);
 
-        for (int i = 0; i < left.getNodesCount(); i++) points.add(left.getNode(i));
+            List<Node> points = new ArrayList<>();
 
-        for (int i = 0; i < right.getNodesCount(); i++) points.add(right.getNode(right.getNodesCount()-i-1));
+            for (int j = 0; j < left.getNodesCount(); j++) points.add(left.getNode(j));
 
-        points.add(left.getNode(0));
+            for (int j = 0; j < right.getNodesCount(); j++) points.add(right.getNode(right.getNodesCount()-j-1));
 
-        Way output = new Way();
-        output.setNodes(points);
+            points.add(left.getNode(0));
+
+            Way thisSegment = new Way();
+            thisSegment.setNodes(points);
+            output.add(thisSegment);
+        }
         return output;
     }
 
@@ -549,10 +591,22 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
     private double calculateOtherAngle(boolean start) {
         Node pivot = _way.getNode(start ? 0 : _way.getNodesCount()-1);
+
         int numValidWays = 0;
         boolean somethingIsNotValid = false;
         Way otherWay = null;
         boolean otherWayStartsHere = false;
+
+        // Ensure the node only shows up once in this way:
+        int connectionsThisWay = 0;
+        for (Node n : _way.getNodes()) {
+            if (n.getUniqueId() == pivot.getUniqueId()) {
+                connectionsThisWay++;
+            }
+        }
+        if (connectionsThisWay != 1) somethingIsNotValid = true;
+
+        // Ensure that there is only one other way, and that the node shows up only once in that way.
         for (Way w : pivot.getParentWays()) {
             if (w.getUniqueId() == _way.getUniqueId() || !_parent.wayIdToRSR.containsKey(w.getUniqueId())) continue;
             otherWay = _parent.wayIdToRSR.get(w.getUniqueId())._alignment;
@@ -571,14 +625,10 @@ public class MarkedRoadRenderer implements RoadRenderer {
             }
             if (numConnections > 1) {
                 somethingIsNotValid = true;
-//                JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() +
-//                        " to be not valid " + numConnections + " connections");
             }
         }
         if (numValidWays != 1) {
             somethingIsNotValid = true;
-//            JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found too many other ways (" + numValidWays + ")");
-
         }
         if (somethingIsNotValid) {
             return (getThisAngle(start) + Math.PI) % (2*Math.PI);
@@ -619,24 +669,24 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
         // Convert forward to string.
         boolean forwardIsAllSame = true;
-        String forwardChange = "";
+        StringBuilder forwardChange = new StringBuilder();
         for (int i = 0; i < forward.length; i++) {
             if (i != 0 && !forward[i-1].equals(forward[i])) forwardIsAllSame = false;
-            if (i != 0) forwardChange += "|";
-            forwardChange += forward[i];
+            if (i != 0) forwardChange.append("|");
+            forwardChange.append(forward[i]);
         }
 
         // Convert backward to string.
         boolean backwardIsAllSame = true;
-        String backwardChange = "";
+        StringBuilder backwardChange = new StringBuilder();
         for (int i = 0; i < backward.length; i++) {
             if (i != 0 && !backward[i-1].equals(backward[i])) backwardIsAllSame = false;
-            if (i != 0) backwardChange += "|";
-            backwardChange += backward[i];
+            if (i != 0) backwardChange.append("|");
+            backwardChange.append(backward[i]);
         }
 
-        if (forwardIsAllSame) forwardChange = forwardChange.split("\\|")[0];
-        if (backwardIsAllSame) backwardChange = backwardChange.split("\\|")[0];
+        if (forwardIsAllSame) forwardChange = new StringBuilder(forwardChange.toString().split("\\|")[0]);
+        if (backwardIsAllSame) backwardChange = new StringBuilder(backwardChange.toString().split("\\|")[0]);
 
         removeTag(_way, "change", cmds);
         removeTag(_way, "change:forward", cmds);
@@ -645,25 +695,27 @@ public class MarkedRoadRenderer implements RoadRenderer {
         removeTag(_way, "change:lanes:forward", cmds);
         removeTag(_way, "change:lanes:backward", cmds);
 
-        if (forwardIsAllSame && backwardIsAllSame && forwardChange.equals(backwardChange) && !forwardChange.equals("")) {
-            addTag(_way, "change", forwardChange, cmds);
+        boolean forwardEqualsBackward = forwardChange.toString().equals(backwardChange.toString());
+
+        if (forwardIsAllSame && backwardIsAllSame && forwardEqualsBackward && !forwardChange.toString().equals("")) {
+            addTag(_way, "change", forwardChange.toString(), cmds);
         }
 
-        if (forwardIsAllSame && !(backwardIsAllSame && forwardChange.equals(backwardChange)) && !forwardChange.equals("")) {
-            addTag(_way, "change" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange, cmds);
+        if (forwardIsAllSame && !(backwardIsAllSame && forwardEqualsBackward) && !forwardChange.toString().equals("")) {
+            addTag(_way, "change" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
 
         }
 
-        if (backwardIsAllSame && !(forwardIsAllSame && forwardChange.equals(backwardChange)) && !forwardChange.equals("")) {
-            addTag(_way, "change:backward", backwardChange, cmds);
+        if (backwardIsAllSame && !(forwardIsAllSame && forwardEqualsBackward) && !forwardChange.toString().equals("")) {
+            addTag(_way, "change:backward", backwardChange.toString(), cmds);
         }
 
-        if (!forwardIsAllSame && !forwardChange.equals("")) {
-            addTag(_way, "change:lanes" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange, cmds);
+        if (!forwardIsAllSame && !forwardChange.toString().equals("")) {
+            addTag(_way, "change:lanes" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
         }
 
-        if (!backwardIsAllSame && !backwardChange.equals("")) {
-            addTag(_way, "change:lanes:backward", backwardChange, cmds);
+        if (!backwardIsAllSame && !backwardChange.toString().equals("")) {
+            addTag(_way, "change:lanes:backward", backwardChange.toString(), cmds);
         }
 
         SequenceCommand c = new SequenceCommand("Change Divider Type", cmds);

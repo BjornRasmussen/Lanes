@@ -216,8 +216,9 @@ public class Lane extends RoadPiece {
             for (int h = 0; h < _parent.getAlignments().size(); h++) {
                 // This runs for each sub part of a road (each segment)
                 Way parentAlignment = _parent.getAlignments().get(h);
-                double swt = _parent.startPoints.get(h)/_parent.getAlignment().getLength();
-                double ewt = _parent.endPoints.get(h)/_parent.getAlignment().getLength();
+                double alignmentLen = _parent.getAlignment().getLength();
+                double swt = Math.max(_parent.startPoints.get(h), 0)/_parent.getAlignment().getLength();
+                double ewt = Math.min(_parent.endPoints.get(h), alignmentLen) / alignmentLen;
                 double offsetStart = swt*_offsetEnd + (1-swt)*_offsetStart;
                 double offsetEnd = ewt*_offsetEnd + (1-ewt)*_offsetStart;
                 double widthStart = swt*getWidth(false) + (1-swt)*getWidth(true);

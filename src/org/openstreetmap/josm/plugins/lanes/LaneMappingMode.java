@@ -5,9 +5,9 @@ package org.openstreetmap.josm.plugins.lanes;
  *
  * -> The LanesPlugin class is only run when JOSM boots up.
  * -> This class is for entering the lane mapping mode and handling all of the rendered roads.
- * -> RoadSegmentRenderer is a class that represents 1 OSM way, and handles all rendering of that way.
+ * -> RoadRenderer is a class that represents 1 OSM way, and handles all rendering of that way.
  *
- * This class stores a list of roadSegmentRenderers, and calls on each of them each time paint() is called.
+ * This class stores a list of RoadRenderers, and calls on each of them each time paint() is called.
  */
 
 import static org.openstreetmap.josm.tools.I18n.tr;
@@ -37,15 +37,15 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         MapViewPaintable, UndoRedoHandler.CommandQueuePreciseListener {
 
 //    private List<TagWithValues> tagsForRendering = null;
-    private List<MarkedRoadRenderer> roadSegments = null;
+    private List<RoadRenderer> roadSegments = null;
     private MapView _mv;
 
-    public Map<Long, MarkedRoadRenderer> wayIdToRSR = new HashMap<>();
+    public Map<Long, RoadRenderer> wayIdToRSR = new HashMap<>();
 
     public LaneMappingMode(MapFrame mapFrame) {
         super(tr("Lane Editing"), "laneconnectivity.png", tr("Activate lane editing mode"),
                 Shortcut.registerShortcut("mapmode:lanemapping", tr("Mode: {0}",
-                        tr("Lane Editing Mode")), KeyEvent.VK_2, Shortcut.SHIFT),
+                tr("Lane Editing Mode")), KeyEvent.VK_2, Shortcut.SHIFT),
                 Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
     }
 
@@ -66,7 +66,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
 
         // Render each road
-        for (MarkedRoadRenderer r : roadSegments) {
+        for (RoadRenderer r : roadSegments) {
             if (wayShouldBeRendered(bounds, r.getWay())) r.render(g);
         }
 
@@ -129,35 +129,18 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Building RoadSegmentRenderers">
-//    private List<TagWithValues> autofillTagsForRendering() {
-//        List<TagWithValues> output = new LinkedList<>();
-//        output.add(new TagWithValues("lanes"));
-//        output.add(new TagWithValues("turn:lanes"));
-//        output.add(new TagWithValues("access:lanes"));
-//        output.add(new TagWithValues("surface:lanes"));
-//        output.add(new TagWithValues("bicycle:lanes"));
-//        output.add(new TagWithValues("bus:lanes"));
-//        output.add(new TagWithValues("psv:lanes"));
-//        output.add(new TagWithValues("width:lanes"));
-//        output.add(new TagWithValues("highway", new String[] {
-//                "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
-//                "secondary", "secondary_link", "tertiary", "tertiary_link", "residential",
-//                "unclassified", "bus_guideway"
-//        }));
-//        return output;
-//    }
 
-    private List<MarkedRoadRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
+    private List<RoadRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
         wayIdToRSR = new HashMap<>();
-        List<MarkedRoadRenderer> output = new ArrayList<>();
+        List<RoadRenderer> output = new ArrayList<>();
         for (Way w : ways) {
-            MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, this);
-            wayIdToRSR.put(w.getUniqueId(), mrr);
-            output.add(mrr);
+            RoadRenderer rr = RoadRenderer.buildRoadRenderer(w, mv, this);
+            wayIdToRSR.put(w.getUniqueId(), rr);
+            output.add(rr);
         }
 
-        for (MarkedRoadRenderer mrr : output) {
-            mrr.updateAlignment(); // updates alignment based on nearby ways.
+        for (RoadRenderer rr : output) {
+            rr.updateAlignment(); // updates alignment based on nearby ways.
         }
 
         return output;
@@ -247,38 +230,15 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     public void mouseMoved(MouseEvent e) {}
     // </editor-fold>
 
-    private MarkedRoadRenderer getShortestSegmentMouseEvent(MouseEvent e) {
-        MarkedRoadRenderer min = null;
-        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
-        for (MarkedRoadRenderer r : roadSegments) {
-            if (r.mouseEventIsInside(e) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
-        }
-        return min;
+    private RoadRenderer getShortestSegmentMouseEvent(MouseEvent e) {
+//        RoadRenderer min = null;
+//        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
+//        for (RoadRenderer r : roadSegments) {
+//            if (r.mouseEventIsInside(e) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
+//        }
+//        return min;
+        return null;
     }
 
     // </editor-fold>
-
-    private class TagWithValues {
-        // For storing which tags allow a way to get loaded into the custom renderer.
-        private String _key;
-        private List<String> _values;
-
-        public TagWithValues(String key, List<String> values) {
-            _key = key;
-            _values = values;
-        }
-
-        public TagWithValues(String key, String[] values) {
-            _key = key;
-            _values = Arrays.asList(values);
-        }
-
-        public TagWithValues(String key) {
-            _key = key;
-            _values = null;
-        }
-
-        public String getKey() { return _key; }
-        public List<String> getValues() { return _values; }
-    }
 }

@@ -6,24 +6,19 @@ import org.openstreetmap.josm.gui.MapView;
 import java.awt.*;
 import java.util.List;
 
-public class UnmarkedRoadRenderer extends RoadRenderer {
+public class UntaggedRoadRenderer extends RoadRenderer {
 
-    protected UnmarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
+    protected UntaggedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
         super(w, mv, parent);
     }
 
     @Override
-    public void render(Graphics2D g) {
+    void render(Graphics2D g) {
 
     }
 
     @Override
-    public Way getWay() {
-        return null;
-    }
-
-    @Override
-    public Way getAlignment() {
+    Way getAlignment() {
         return null;
     }
 

@@ -23,6 +23,7 @@ public class IntersectionRenderer {
     // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Constructors">
+
     public IntersectionRenderer(List<Way> ways, MapView mv) {
         _ways = ways;
         _mv = mv;
@@ -42,6 +43,6 @@ public class IntersectionRenderer {
     // </editor-fold>
 
     private void createIntersectionLayout() {
-
+        
     }
 }

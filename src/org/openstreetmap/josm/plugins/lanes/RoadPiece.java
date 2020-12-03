@@ -16,8 +16,6 @@ abstract class RoadPiece {
 
     protected double _offsetStart;
     protected double _offsetEnd;
-    protected double _widthStart;
-    protected double _widthEnd;
     protected boolean _selected;
 
     protected MapView _mv;
@@ -114,9 +112,9 @@ abstract class RoadPiece {
         g.setColor(color);
 
         for (int i = 0; i < parentAlignments.size(); i++) {
-            double swt = (_parent.startPoints.get(i)/_parent.getAlignment().getLength());
+            double swt = (Math.max(_parent.startPoints.get(i), 0)/_parent.getAlignment().getLength());
             double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
-            double ewt = (_parent.endPoints.get(i)/_parent.getAlignment().getLength());
+            double ewt = (Math.min(_parent.endPoints.get(i), _parent.getAlignment().getLength())/_parent.getAlignment().getLength());
             double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
             Way alignment = Utils.getParallel(parentAlignments.get(i), startOffset, endOffset, false,
                     i==0 ? _parent.otherStartAngle : Double.NaN, i==parentAlignments.size()-1 ? _parent.otherEndAngle : Double.NaN);

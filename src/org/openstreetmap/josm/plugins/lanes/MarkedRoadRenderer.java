@@ -15,16 +15,12 @@ import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.List;
 
-public class MarkedRoadRenderer implements RoadRenderer {
+public class MarkedRoadRenderer extends RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
     List<Double> startPoints; // Measured in meters from start.
     List<Double> endPoints; // Anything greater than or equal to way length means end.
-
-    private final Way _way;
-    private Way _alignment;
-    private final MapView _mv;
 
     private Way _outline;
     private List<Way> _asphalt;
@@ -45,35 +41,26 @@ public class MarkedRoadRenderer implements RoadRenderer {
     public double otherStartAngle = Double.NaN;
     public double otherEndAngle = Double.NaN;
 
-    public LaneMappingMode _parent;
     protected boolean _isValid = true; // Display red error line if tags are wrong.
 
     // </editor-fold>
 
-    public MarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
-        _way = w;
-        _mv = mv;
-        _parent = parent;
+    protected MarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
+        super(w, mv, parent);
 
         // Set start/end segments.
         startPoints = new ArrayList<>();
         startPoints.add(0.0);
         endPoints = new ArrayList<>();
-        endPoints.add(w.getLength() + 1);
+        endPoints.add(w.getLength() + 100);
 
         try { createRoadLayout(); } catch (Exception e) { _isValid = false; }
-
-        endPoints = new ArrayList<>();
-        endPoints.add(_alignment.getLength());
-
     }
-
-    @Override
-    public Way getWay() { return _way; }
 
     @Override
     public Way getAlignment() { return _alignment; }
 
+    @Override
     public List<Way> getAlignments() {
         // Returns sub parts of alignment.
         List<Way> output = new ArrayList<>();
@@ -92,7 +79,6 @@ public class MarkedRoadRenderer implements RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
-    @Override
     public void render(Graphics2D g) {
 
         if (!_isValid) {

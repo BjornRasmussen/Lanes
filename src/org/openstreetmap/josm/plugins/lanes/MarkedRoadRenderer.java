@@ -19,11 +19,8 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
-    List<Double> startPoints; // Measured in meters from start.
-    List<Double> endPoints; // Anything greater than or equal to way length means end.
-
     private Way _outline;
-    private List<Way> _asphalt;
+    protected Way _alignment;
 
     public static String selected = "";
 
@@ -38,9 +35,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
     private RoadPiece _leftRoadEdge;
     private RoadPiece _rightRoadEdge;
 
-    public double otherStartAngle = Double.NaN;
-    public double otherEndAngle = Double.NaN;
-
     protected boolean _isValid = true; // Display red error line if tags are wrong.
 
     // </editor-fold>
@@ -48,34 +42,11 @@ public class MarkedRoadRenderer extends RoadRenderer {
     protected MarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
         super(w, mv, parent);
 
-        // Set start/end segments.
-        startPoints = new ArrayList<>();
-        startPoints.add(0.0);
-        endPoints = new ArrayList<>();
-        endPoints.add(w.getLength() + 100);
-
         try { createRoadLayout(); } catch (Exception e) { _isValid = false; }
     }
 
     @Override
     public Way getAlignment() { return _alignment; }
-
-    @Override
-    public List<Way> getAlignments() {
-        // Returns sub parts of alignment.
-        List<Way> output = new ArrayList<>();
-        for (int i = 0; i < startPoints.size(); i++) {
-            double start = Math.max(startPoints.get(i), 0);
-            double end = Math.min(endPoints.get(i), _alignment.getLength());
-
-            Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
-
-            if (alignmentPart != null) {
-                output.add(alignmentPart);
-            }
-        }
-        return output;
-    }
 
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
@@ -105,74 +76,12 @@ public class MarkedRoadRenderer extends RoadRenderer {
             return;
         }
         try {
-            renderAsphalt(g);
+            renderAsphalt(g, Utils.DEFAULT_ASPHALT_COLOR);
             List<RoadPiece> roadPieces = getRoadPieces(true);
             for (RoadPiece roadPiece : roadPieces) {
                 roadPiece.render(g);
             }
         } catch (Exception ignored) {} // Don't render roads that can't be rendered (due to crazy alignments or lanes that go from 0 to 1000 m wide in 10 m).
-    }
-
-
-    private void renderAsphalt(Graphics2D g) {
-        g.setColor(Utils.DEFAULT_ASPHALT_COLOR);
-
-        for (Polygon p : getAsphaltOutlinePixels()) g.fillPolygon(p);
-
-        g.setColor(new Color(0, 0, 0, 0));
-        g.setStroke(GuiHelper.getCustomizedStroke("0"));
-    }
-
-    private List<Polygon> getAsphaltOutlinePixels() {
-        if (_asphalt == null) _asphalt = getAsphaltOutlineCoords();
-
-        List<Polygon> output = new ArrayList<>();
-        for (Way asphalt : _asphalt) {
-            int[] xPoints = new int[asphalt.getNodesCount()];
-            int[] yPoints = new int[xPoints.length];
-
-            for (int i = 0; i < asphalt.getNodesCount(); i++) {
-                xPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getX() + 0.5);
-                yPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getY() + 0.5);
-            }
-
-            output.add(new Polygon(xPoints, yPoints, xPoints.length));
-        }
-        return output;
-    }
-
-    private List<Way> getAsphaltOutlineCoords() {
-        List<Way> output = new ArrayList<>();
-        for (int i = 0; i < startPoints.size(); i++) {
-            double start = Math.max(startPoints.get(i), 0);
-            double end = Math.min(endPoints.get(i), _alignment.getLength());
-
-            Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
-            if (alignmentPart == null) {
-                // Most likely invalid bounds
-                return new ArrayList<>();
-            }
-
-            Way left = Utils.getParallel(alignmentPart, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
-                    _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false,
-                    i==0 ? otherStartAngle : Double.NaN, i==startPoints.size()-1 ? otherEndAngle : Double.NaN);
-            Way right = Utils.getParallel(alignmentPart, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
-                    _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false,
-                    i==0 ? otherStartAngle : Double.NaN, i==startPoints.size()-1 ? otherEndAngle : Double.NaN);
-
-            List<Node> points = new ArrayList<>();
-
-            for (int j = 0; j < left.getNodesCount(); j++) points.add(left.getNode(j));
-
-            for (int j = 0; j < right.getNodesCount(); j++) points.add(right.getNode(right.getNodesCount()-j-1));
-
-            points.add(left.getNode(0));
-
-            Way thisSegment = new Way();
-            thisSegment.setNodes(points);
-            output.add(thisSegment);
-        }
-        return output;
     }
 
     // </editor-fold>
@@ -556,79 +465,28 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Processing Alignments and Angles (For clean connections between ways)">
 
+    @Override
     public void updateAlignment() {
         // Recalculate alignment, this time using nearby ways for the angle.
-        otherStartAngle = getOtherAngle(true);
-        otherEndAngle = getOtherAngle(false);
-        getPlacementInformation();
-    }
-
-    public double getOtherAngle(boolean start) {
-        if (start && Double.isNaN(otherStartAngle)) {
-            otherStartAngle = calculateOtherAngle(true);
-        }
-
-        if (!start && Double.isNaN(otherEndAngle)) {
-            otherEndAngle = calculateOtherAngle(false);
-        }
-
-        return start ? otherStartAngle : otherEndAngle;
-    }
-
-    private double calculateOtherAngle(boolean start) {
-        Node pivot = _way.getNode(start ? 0 : _way.getNodesCount()-1);
-
-        int numValidWays = 0;
-        boolean somethingIsNotValid = false;
-        Way otherWay = null;
-        boolean otherWayStartsHere = false;
-
-        // Ensure the node only shows up once in this way:
-        int connectionsThisWay = 0;
-        for (Node n : _way.getNodes()) {
-            if (n.getUniqueId() == pivot.getUniqueId()) {
-                connectionsThisWay++;
-            }
-        }
-        if (connectionsThisWay != 1) somethingIsNotValid = true;
-
-        // Ensure that there is only one other way, and that the node shows up only once in that way.
-        for (Way w : pivot.getParentWays()) {
-            if (w.getUniqueId() == _way.getUniqueId() || !_parent.wayIdToRSR.containsKey(w.getUniqueId())) continue;
-            otherWay = _parent.wayIdToRSR.get(w.getUniqueId())._alignment;
-            numValidWays++;
-//            JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be valid");
-            // Check to ensure that pivot is only part of w at one of the endpoints.
-            int numConnections = 0;
-            for (int i = 0; i < w.getNodesCount(); i++) {
-                if (w.getNode(i).getUniqueId() != pivot.getUniqueId()) continue;
-                numConnections++;
-                if (i!=0 && i!=w.getNodesCount()-1) {
-//                    JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be not valid node pos");
-                    somethingIsNotValid = true;
-                }
-                otherWayStartsHere = i==0;
-            }
-            if (numConnections > 1) {
-                somethingIsNotValid = true;
-            }
-        }
-        if (numValidWays != 1) {
-            somethingIsNotValid = true;
-        }
-        if (somethingIsNotValid) {
-            return (getThisAngle(start) + Math.PI) % (2*Math.PI);
-        } else {
-            Node secondToLast = otherWayStartsHere ? otherWay.getNode(1) : otherWay.getNode(otherWay.getNodesCount() - 2);
-            Node last = otherWayStartsHere ? otherWay.getNode(0) : otherWay.getNode(otherWay.getNodesCount() - 1);
-            return last.getCoor().bearing(secondToLast.getCoor());
+        if (_isValid) {
+            otherStartAngle = getOtherAngle(true);
+            otherEndAngle = getOtherAngle(false);
+            getPlacementInformation();
         }
     }
 
-    public double getThisAngle(boolean start) {
-        Node first = start ? _alignment.getNode(0) : _alignment.getNode(_alignment.getNodesCount() - 1);
-        Node second = start ? _alignment.getNode(1) : _alignment.getNode(_alignment.getNodesCount() - 2);
-        return first.getCoor().bearing(second.getCoor());
+    @Override
+    public Way getLeftEdge(Way alignmentPart, int segment) {
+        return Utils.getParallel(alignmentPart, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
+                _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false,
+                segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
+    }
+
+    @Override
+    public Way getRightEdge(Way alignmentPart, int segment) {
+        return Utils.getParallel(alignmentPart, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
+                _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false,
+                segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
     }
 
     // </editor-fold>

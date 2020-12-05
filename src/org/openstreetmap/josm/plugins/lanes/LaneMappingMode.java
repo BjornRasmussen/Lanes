@@ -55,7 +55,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         _mv = mv;
 
         // Get map data for rendering:
-        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), mv);
+        if (roadSegments == null) roadSegments = getAllRoadSegments(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), mv);
 
         // Get bounds where rendering should happen
         ProjectionBounds bounds = mv.getProjectionBounds();
@@ -135,6 +135,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         List<RoadRenderer> output = new ArrayList<>();
         for (Way w : ways) {
             RoadRenderer rr = RoadRenderer.buildRoadRenderer(w, mv, this);
+            if (rr == null) continue;
             wayIdToRSR.put(w.getUniqueId(), rr);
             output.add(rr);
         }
@@ -144,26 +145,6 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         }
 
         return output;
-    }
-
-
-    private List<Way> getWays() {
-        List<Way> output = new ArrayList<>();
-        Collection<Way> allWaysForRendering = MainApplication.getLayerManager().getEditDataSet().getWays();
-
-        for (Iterator<Way> it = allWaysForRendering.iterator(); it.hasNext(); ) {
-            Way possibleRoad = it.next();
-            if (isRoadForLaneEditor(possibleRoad)) {
-                output.add(possibleRoad);
-            }
-        }
-
-        return output;
-    }
-
-    private boolean isRoadForLaneEditor(Way way) {
-        return (!way.hasAreaTags() && way.isDrawable() &&
-                (way.hasTag("lanes") || way.hasTag("lanes:forward") || way.hasTag("lanes:backward")));
     }
 
     // </editor-fold>

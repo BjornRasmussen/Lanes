@@ -23,7 +23,7 @@ public class RoadEdge extends RoadPiece {
         String roadEdge = Utils.shoulderLineColor.containsKey(country) ?
                 Utils.shoulderLineColor.get(country) : Utils.shoulderLineColor.get("default");
 
-        renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.SOLID,
+        Utils.renderRoadLine(g, _mv, _parent, 0, 0, _offsetStart, _offsetEnd, Utils.DividerType.SOLID,
                 (_way.isOneway() == 1 && _direction == -1) ? Color.YELLOW : Color.WHITE);
     }
 }

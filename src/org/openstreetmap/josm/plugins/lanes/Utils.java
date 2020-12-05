@@ -3,6 +3,8 @@ package org.openstreetmap.josm.plugins.lanes;
 import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
+import org.openstreetmap.josm.gui.MapView;
+import org.openstreetmap.josm.gui.util.GuiHelper;
 import org.openstreetmap.josm.tools.ImageProvider;
 import org.openstreetmap.josm.tools.RightAndLefthandTraffic;
 
@@ -20,16 +22,18 @@ public class Utils {
     public final static double WIDTH_LANES = 3.5; // Standard lane width.
     public final static double WIDTH_BIKE_LANES = 1.75; // Bike lane width.
 
-    public final static double RENDERING_WIDTH_DIVIDER = 0.8;
+    public final static double RENDERING_WIDTH_DIVIDER = 0.6;
     public final static double WIDTH_INVALID_METERS = 5.0;
 
     public final static double DIST_BETWEEN_TURNS = 24.0; // Distance in meters between turn arrows on rendered lanes.
     public final static double DIST_TO_FIRST_TURN = 13.5; // Distance in meters to first turn arrow on rendered lanes.
 
-    public final static Color DEFAULT_ASPHALT_COLOR = new Color(40, 40, 50, 200);
-    public final static Color DEFAULT_SELECTED_ASPHALT_COLOR = new Color(150, 40, 50, 200);
+    public final static Color DEFAULT_ASPHALT_COLOR = new Color(40, 40, 50, 170);
+    public final static Color DEFAULT_UNTAGGED_ASPHALT_COLOR = new Color(255, 40, 40, 140);
+    public final static Color DEFAULT_SELECTED_ASPHALT_COLOR = new Color(150, 40, 50, 170);
     public final static Color DEFAULT_DIVIDER_COLOR = Color.WHITE;
     public final static Color DEFAULT_CENTRE_DIVIDER_COLOR = Color.YELLOW;
+    public final static Color DEFAULT_UNTAGGED_ROADEDGE_COLOR = Color.WHITE;
     public final static Color DEFAULT_INVALID_COLOR = new Color(255, 40, 0);
 
     public final static Image uTurnLeft = ImageProvider.get("roadmarkings", "u_turn_left.png").getImage();
@@ -52,13 +56,16 @@ public class Utils {
     public final static Image lr_slightRight = ImageProvider.get("lowresroadmarkings", "slight_right.png").getImage();
     public final static Image lr_through = ImageProvider.get("lowresroadmarkings", "through.png").getImage();
 
+    public final static Image questionMark = ImageProvider.get("roadmarkings", "question_mark.png").getImage();
+    public final static Image lr_questionMark = ImageProvider.get("lowresroadmarkings", "question_mark.png").getImage();
+
     public final static Map<String, String> isCenterYellow = getYML("resources/renderinginfo/isCenterYellow");
     public final static Map<String, String> shoulderLineColor = getYML("resources/renderinginfo/shoulderLineColor");
     public Map<String, String> isCenterTurnLaneKnown = getYML("resources/renderinginfo/isCenterTurnLaneKnown");
 
     public enum LaneType {DRIVING, BICYCLE, BUS, HOV}
-    public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID,
-        CENTRE_DIVIDER_WIDE, CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE}
+    public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID, CENTRE_DIVIDER_WIDE,
+        CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE, UNMARKED_ROAD_EDGE, UNTAGGED_ROAD_EDGE}
     // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Finding Parallel Ways">
@@ -185,8 +192,6 @@ public class Utils {
         return meters / Math.cos(location.getNode(0).getCoor().getY() / 180.0 * Math.PI);
     }
 
-    // </editor-fold>
-
     public static Way getSubPart(Way w, double startMeters, double endMeters) {
         List<Node> newNodes = new ArrayList<>();
         double distSoFar = 0;
@@ -244,8 +249,129 @@ public class Utils {
         }
     }
 
+    // </editor-fold>
+
+    // <editor-fold defaultstate=collapsed desc="Methods for Rendering">
+
+    public static void renderRoadLine(Graphics2D g, MapView mv, RoadRenderer parent,
+                                      double widthStart, double widthEnd, double offsetStart, double offsetEnd, DividerType type, Color color) {
+        double pixelsPerMeter = 100.0 / mv.getDist100Pixel();
+        double stripeWidth = 1.4/8;
+
+        if (type == DividerType.DASHED) {
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, pixelsPerMeter * 9, 0));
+        } else if (type == DividerType.QUICK_DASHED) {
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 1, pixelsPerMeter * 3, pixelsPerMeter*3));
+        } else if (type == DividerType.SOLID) {
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0, 0));
+        } else if (type == DividerType.UNTAGGED_ROAD_EDGE) {
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 1, 0, 0));
+        } else if (type == DividerType.UNMARKED_ROAD_EDGE) {
+            g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0, 0));
+        } else if (type == DividerType.DOUBLE_SOLID) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd,offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color);
+            return;
+        } else if (type == DividerType.DASHED_FOR_RIGHT) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.DASHED, color);
+            return;
+        } else if (type == DividerType.DASHED_FOR_LEFT) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.DASHED, color);
+            return;
+        } else if (type == DividerType.CENTRE_DIVIDER_WIDE) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color);
+            return;
+        } else if (type == DividerType.FORWARD_DIVIDER_WIDE) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+            return;
+        } else if (type == DividerType.BACKWARD_DIVIDER_WIDE) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+            return;
+        } else if (type == DividerType.CENTRE_LANE) {
+            renderRoadLine(g, mv, parent, widthStart, widthEnd,offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_RIGHT, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_LEFT, color);
+            return;
+        }
+        List<Way> parentAlignments = parent.getAlignments();
+        g.setColor(color);
+
+        for (int i = 0; i < parentAlignments.size(); i++) {
+            double swt = (Math.max(parent.startPoints.get(i), 0)/parent.getAlignment().getLength());
+            double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
+            double ewt = (Math.min(parent.endPoints.get(i), parent.getAlignment().getLength())/parent.getAlignment().getLength());
+            double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
+            Way alignment = getParallel(parentAlignments.get(i), startOffset, endOffset, false,
+                    i==0 ? parent.otherStartAngle : Double.NaN, i==parentAlignments.size()-1 ? parent.otherEndAngle : Double.NaN);
+
+            int[] xPoints = new int[alignment.getNodesCount()];
+            int[] yPoints = new int[alignment.getNodesCount()];
+            for (int j = 0; j < alignment.getNodesCount(); j++) {
+                xPoints[j] = (int) (mv.getPoint(alignment.getNode(j).getCoor()).getX() + 0.5);
+                yPoints[j] = (int) (mv.getPoint(alignment.getNode(j).getCoor()).getY() + 0.5);
+            }
+
+            g.drawPolyline(xPoints, yPoints, xPoints.length);
+        }
+
+        // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
+        g.setColor(new Color(0, 0, 0, 0));
+        g.setStroke(GuiHelper.getCustomizedStroke("0"));
+    }
+
+    public static Stroke getCustomStroke(double width, double metersDash, double metersGap, double offset) {
+        if (metersGap <= 0.01 && metersGap >= -0.01) {
+            return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1);
+        } else {
+            return new BasicStroke((float) width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1,
+                    new float[] {(float) metersDash, (float) metersGap}, (float) offset);
+        }
+    }
+
+    // </editor-fold>
+
+    // <editor-fold defaultstate=collapsed desc="Tools">
+
     public static boolean isRightHand(Way location) {
         return RightAndLefthandTraffic.isRightHandTraffic(location.getNode(0).getCoor());
+    }
+
+    public static double parseWidth(String value) {
+        try {
+            if (value.endsWith(" lane")) {
+                return Utils.WIDTH_LANES * Double.parseDouble(value.substring(0, value.length() - 5));
+            } else if (value.endsWith(" lanes")) {
+                return Utils.WIDTH_LANES * Double.parseDouble(value.substring(0, value.length() - 6));
+            } else if (value.endsWith(" m")) {
+                return Double.parseDouble(value.substring(0, value.length() - 2));
+            } else if (value.endsWith(" km")) {
+                return 1000 * Double.parseDouble(value.substring(0, value.length() - 3));
+            } else if (value.endsWith(" mi")) {
+                return 1609.344 * Double.parseDouble(value.substring(0, value.length() - 3));
+            } else if (value.endsWith("'")) {
+                return 1 / 3.28084 * Double.parseDouble(value.substring(0, value.length() - 1));
+            } else if (value.endsWith("\"") && !value.contains("'")) {
+                return 1 / 3.28084 / 12 * Double.parseDouble(value.substring(0, value.length() - 1));
+            } else if (value.endsWith("\"") && value.contains("'")) {
+                String[] split = value.split("'");
+                double feet = Double.parseDouble(split[0]);
+                double inches = Double.parseDouble(split[1].substring(0, value.length() - 1));
+                return 1 / 3.28084 * (feet + inches / 12);
+            }
+            return Double.parseDouble(value);
+        } catch (Exception e) { return Double.NaN; }
     }
 
     private static Map<String, String> getYML(String path) {
@@ -268,4 +394,12 @@ public class Utils {
     public static boolean isOneway(Way w) {
         return w.isOneway() == 1 || w.hasTag("junction", "roundabout");
     }
+
+    // </editor-fold>
+
+    // <editor-fold defaultstate=collapsed desc="Methods for Mouse Handling">
+
+
+
+    // </editor-fold>
 }

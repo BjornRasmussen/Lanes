@@ -26,7 +26,7 @@ public class Lane extends RoadPiece {
         if (widthTag != null && widthTag.equals("")) widthTag = null;
 
         try {
-            width = parseLaneWidth(widthTag);
+            width = Utils.parseWidth(widthTag);
         } catch (Exception e) {
             widthTag = null;
         }
@@ -45,7 +45,8 @@ public class Lane extends RoadPiece {
     @Override
     void render(Graphics2D g) {
         if (_direction == 0) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false),
+                    _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
         }
         renderTurnMarkings(g);
     }
@@ -206,7 +207,7 @@ public class Lane extends RoadPiece {
     }
 
     private void renderTurnMarkings(Graphics2D g) {
-        if (_mv.getScale() > 1.0) return; // Don't render turn lane markings when the map is zoomed out
+        if (_mv.getScale() > 0.5) return; // Don't render turn lane markings when the map is too zoomed out
 
         try {
             String turn = getTurn();
@@ -286,7 +287,7 @@ public class Lane extends RoadPiece {
 
         List<String> turns = new ArrayList<>();
         Collections.addAll(turns, turn.split(";"));
-        boolean lr = _mv.getScale() > 0.04;
+        boolean lr = _mv.getScale() > 0.8;
         if (turns.contains("left")) drawImageAt(g, lr ? Utils.lr_left : Utils.left, x, y, width, rotationRadians);
         if (turns.contains("right")) drawImageAt(g, lr ? Utils.lr_right : Utils.right, x, y, width, rotationRadians);
         if (turns.contains("slight_left")) drawImageAt(g, lr ? Utils.lr_slightLeft : Utils.slightLeft, x, y, width, rotationRadians);

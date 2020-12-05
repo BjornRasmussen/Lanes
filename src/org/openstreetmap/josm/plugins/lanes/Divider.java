@@ -35,7 +35,7 @@ public class Divider extends RoadPiece {
                 } else {
                     value = "0";
                 }
-                output = parseLaneWidth(value);
+                output = Utils.parseWidth(value);
             }
             if (_direction == 1) {
                 if (_way.hasTag("width:dividers:forward:start") && start) {
@@ -51,7 +51,7 @@ public class Divider extends RoadPiece {
                 } else if (_way.hasTag("width:dividers") && _way.isOneway() == 1) {
                     value = _way.getInterestingTags().get("width:dividers").split(laneSymbol)[_position];
                 }
-                output = parseLaneWidth(value);
+                output = Utils.parseWidth(value);
             }
             if (_direction == -1) {
                 if (_way.hasTag("width:dividers:backward:start") && start) {
@@ -61,7 +61,7 @@ public class Divider extends RoadPiece {
                 } else if (_way.hasTag("width:dividers:backward")) {
                     value = _way.getInterestingTags().get("width:dividers:backward").split(laneSymbol)[_position];
                 }
-                output = parseLaneWidth(value);
+                output = Utils.parseWidth(value);
             }
         } catch (Exception ignored) {}
         return output + Utils.RENDERING_WIDTH_DIVIDER;
@@ -71,15 +71,15 @@ public class Divider extends RoadPiece {
     public void render(Graphics2D g) {
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
         }
         else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            renderRoadLine(g, _offsetStart, _offsetEnd, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else {
             if (_type == null) getDividerType();
@@ -88,7 +88,7 @@ public class Divider extends RoadPiece {
                 if (_type == Utils.DividerType.DASHED_FOR_RIGHT) type = Utils.DividerType.DASHED_FOR_LEFT;
                 if (_type == Utils.DividerType.DASHED_FOR_LEFT) type = Utils.DividerType.DASHED_FOR_RIGHT;
             }
-            renderRoadLine(g, _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
         }
     }
 

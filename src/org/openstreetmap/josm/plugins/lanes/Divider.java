@@ -69,6 +69,8 @@ public class Divider extends RoadPiece {
 
     @Override
     public void render(Graphics2D g) {
+        if (_mv.getScale() > 4) return; // Don't render when the map is too zoomed out
+
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
             Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
@@ -100,20 +102,20 @@ public class Divider extends RoadPiece {
     // <editor-fold defaultstate="collapsed" desc="Methods For Displaying Pop-Up"
 
     @Override
-    protected JPanel getPopupJPanel() {
+    protected JPanel getPopupContent() {
         JPanel output = new JPanel();
-        output.setLayout(new GridLayout(0, _direction == 0 ? 4 /* fixme */ : 4));
+        output.setLayout(new GridLayout(0, _direction == 0 ? 4 /* fixme make 6 */ : 4));
         if (_direction == 0) {
-                output.add(getIconButton(Utils.DividerType.SOLID, "SolidCentre"));
-                output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeftCentre"));
-                output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRightCentre"));
-                output.add(getIconButton(Utils.DividerType.DASHED, "DashedCentre"));
-            } else {
-                output.add(getIconButton(Utils.DividerType.SOLID, "Solid"));
-                output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeft"));
-                output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRight"));
-                output.add(getIconButton(Utils.DividerType.DASHED, "Dashed"));
-            }
+            output.add(getIconButton(Utils.DividerType.SOLID, "SolidCentre"));
+            output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeftCentre"));
+            output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRightCentre"));
+            output.add(getIconButton(Utils.DividerType.DASHED, "DashedCentre"));
+        } else {
+            output.add(getIconButton(Utils.DividerType.SOLID, "Solid"));
+            output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeft"));
+            output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRight"));
+            output.add(getIconButton(Utils.DividerType.DASHED, "Dashed"));
+        }
         return output;
     }
 
@@ -137,33 +139,27 @@ public class Divider extends RoadPiece {
             public void mouseClicked(MouseEvent e) {
                 // Since the roadPieces get replaced each time a tag gets changed, find the correct NEW
                 // divider in the same place as this divider. This will allow each pop-up to be used more than once.
-                List<RoadPiece> roadPieces = _parent.getRoadPieces(false);
+                RoadRenderer parent = _parent._parent.wayIdToRSR.get(_parent.getWay().getUniqueId());
+                if (!(parent instanceof MarkedRoadRenderer)) return;
+                List<RoadPiece> roadPieces = ((MarkedRoadRenderer) parent).getRoadPieces(false);
                 for (RoadPiece rp : roadPieces) {
-                    if(rp instanceof Divider && rp._direction == _direction && rp._position == _position) {
+                    if (rp instanceof Divider && rp._direction == _direction && rp._position == _position) {
                         ((Divider) rp).setDividerType(type);
                     }
                 }
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
-
-            }
+            public void mousePressed(MouseEvent e) {}
 
             @Override
-            public void mouseReleased(MouseEvent e) {
-
-            }
+            public void mouseReleased(MouseEvent e) {}
 
             @Override
-            public void mouseEntered(MouseEvent e) {
-
-            }
+            public void mouseEntered(MouseEvent e) {}
 
             @Override
-            public void mouseExited(MouseEvent e) {
-
-            }
+            public void mouseExited(MouseEvent e) {}
         };
     }
 

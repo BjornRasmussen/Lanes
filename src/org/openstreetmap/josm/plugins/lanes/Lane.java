@@ -275,11 +275,9 @@ public class Lane extends RoadPiece {
     private void drawTurnMarkingsAt(String turn, Graphics2D g, int x, int y, double width, double rotationRadians) {
         // Ensure that this road marking is within 30 ft of the map before rendering.
         BBox bBox = _mv.getRealBounds().toBBox();
-        if (((x < _mv.getPoint(bBox.getTopLeft()).x) || (x > _mv.getPoint(bBox.getBottomRight()).x)) &&
-                ((y < _mv.getPoint(bBox.getTopLeft()).y) || (y > _mv.getPoint(bBox.getBottomRight()).y))) return;
-
-        double rotationModPiOverTwo = rotationRadians % (Math.PI / 2);
-        width = width * (Math.cos(rotationModPiOverTwo) + Math.sin(rotationModPiOverTwo));
+        int outside = (int) (width/_mv.getDist100Pixel());
+        if ((x < _mv.getPoint(bBox.getTopLeft()).x - outside) || (x > _mv.getPoint(bBox.getBottomRight()).x + outside) ||
+                (y < _mv.getPoint(bBox.getTopLeft()).y - outside) || (y > _mv.getPoint(bBox.getBottomRight()).y + outside)) return;
 
         int offset = (int) (width * 50 / _mv.getDist100Pixel());
         x -= offset;
@@ -287,7 +285,7 @@ public class Lane extends RoadPiece {
 
         List<String> turns = new ArrayList<>();
         Collections.addAll(turns, turn.split(";"));
-        boolean lr = _mv.getScale() > 0.8;
+        boolean lr = _mv.getScale() > 0.1;
         if (turns.contains("left")) drawImageAt(g, lr ? Utils.lr_left : Utils.left, x, y, width, rotationRadians);
         if (turns.contains("right")) drawImageAt(g, lr ? Utils.lr_right : Utils.right, x, y, width, rotationRadians);
         if (turns.contains("slight_left")) drawImageAt(g, lr ? Utils.lr_slightLeft : Utils.slightLeft, x, y, width, rotationRadians);
@@ -301,27 +299,9 @@ public class Lane extends RoadPiece {
 
     private void drawImageAt(Graphics2D g, Image image, int x, int y, double width, double rotationRadians) {
         int size = (int) (width * 100 / _mv.getDist100Pixel()) + 1;
-        g.drawImage(rotate(toBufferedImage(image), rotationRadians), x, y, size, size, null);
-    }
-
-    public BufferedImage rotate(BufferedImage image, double angle) {
-        double sin = Math.abs(Math.sin(angle));
-        double cos = Math.abs(Math.cos(angle));
-        int w = image.getWidth();
-        int h = image.getHeight();
-        int newWidth = (int)Math.floor(w*cos+h*sin);
-        int newHeight = (int) Math.floor(h * cos + w * sin);
-
-        GraphicsConfiguration gc = getDefaultConfiguration();
-        BufferedImage result = gc.createCompatibleImage(newWidth, newHeight, Transparency.TRANSLUCENT);
-        Graphics2D g = result.createGraphics();
-
-        g.translate((newWidth - w) / 2, (newHeight - h) / 2);
-        g.rotate(angle, w / 2.0, h / 2.0);
-        g.drawRenderedImage(image, null);
-        g.dispose();
-
-        return result;
+        g.rotate(rotationRadians, x+size/2, y+size/2);
+        g.drawImage(image, x, y, size, size, null); //rotate(toBufferedImage(image), rotationRadians)
+        g.rotate(-rotationRadians, x+size/2, y+size/2);
     }
 
     private GraphicsConfiguration getDefaultConfiguration() {

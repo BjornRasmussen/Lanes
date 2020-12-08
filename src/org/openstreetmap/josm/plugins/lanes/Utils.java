@@ -1,8 +1,11 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import org.openstreetmap.josm.data.UndoRedoHandler;
+import org.openstreetmap.josm.data.coor.EastNorth;
 import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
+import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 import org.openstreetmap.josm.tools.ImageProvider;
@@ -10,7 +13,9 @@ import org.openstreetmap.josm.tools.RightAndLefthandTraffic;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -67,6 +72,8 @@ public class Utils {
     public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID, CENTRE_DIVIDER_WIDE,
         CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE, UNMARKED_ROAD_EDGE, UNTAGGED_ROAD_EDGE}
     // </editor-fold>
+
+    private static JFrame deleterFrame = null;
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Finding Parallel Ways">
 
@@ -318,6 +325,7 @@ public class Utils {
 
             int[] xPoints = new int[alignment.getNodesCount()];
             int[] yPoints = new int[alignment.getNodesCount()];
+
             for (int j = 0; j < alignment.getNodesCount(); j++) {
                 xPoints[j] = (int) (mv.getPoint(alignment.getNode(j).getCoor()).getX() + 0.5);
                 yPoints[j] = (int) (mv.getPoint(alignment.getNode(j).getCoor()).getY() + 0.5);
@@ -399,7 +407,106 @@ public class Utils {
 
     // <editor-fold defaultstate=collapsed desc="Methods for Mouse Handling">
 
+    public static boolean mouseEventIsInside(MouseEvent e, List<Polygon> outlines, MapView mv) {
+        for (Polygon outline : outlines) if (outline.contains(e.getPoint())) return true;
+        return false;
+    }
 
+    public static void displayPopup(JPanel content, MouseEvent e, MapView mv, Way way) {
+        if (content == null) return;
+
+        JPanel mainPanel = new JPanel();
+        mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        mainPanel.add(content);
+
+        JWindow w = new JWindow(MainApplication.getMainFrame());
+
+        w.add(mainPanel);
+        w.pack();
+
+        Point aboveMouse = new Point(e.getXOnScreen() - (mainPanel.getWidth() / 2), e.getYOnScreen() - mainPanel.getHeight() - 10);
+        Point belowMouse = new Point(e.getXOnScreen() - (mainPanel.getWidth() / 2), e.getYOnScreen() + 10);
+        boolean goAbove = e.getY() - 30 > mainPanel.getHeight();
+        w.setLocation(goAbove ? aboveMouse : belowMouse);
+        w.setVisible(true);
+
+        // <editor-fold defaultstate=collapsed desc="Things that close the Window">
+
+        // * Map moved / zoom changed
+        mv.addRepaintListener(new MapView.RepaintListener() {
+            double scale = mv.getScale();
+            EastNorth center = mv.getCenter();
+
+            @Override
+            public void repaint(long tm, int x, int y, int width, int height) {
+                // This runs when something has changed.  Check if scale or map position have changed.
+                if (Math.abs(mv.getScale() - scale) > 0.001 || Math.abs(mv.getCenter().getX() - center.getX()) > 0.001 ||
+                        Math.abs(mv.getCenter().getY() - center.getY()) > 0.001) {
+                    scale = mv.getScale();
+                    center = mv.getCenter();
+                    unClick(w, mv);
+                }
+            }
+        });
+
+        // * Mouse pressed down somewhere on the map outside of the window (just map clicks - editing the tags of selected way won't close it)
+        mv.addMouseListener(new MouseListener() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                unClick(w, mv);
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+            }
+        });
+
+        // * Way corresponding to Window no longer exists.
+        UndoRedoHandler.getInstance().addCommandQueuePreciseListener(new UndoRedoHandler.CommandQueuePreciseListener() {
+            @Override
+            public void commandAdded(UndoRedoHandler.CommandAddedEvent e) {
+                verifyExistence();
+            }
+
+            @Override
+            public void cleaned(UndoRedoHandler.CommandQueueCleanedEvent e) {
+                verifyExistence();
+            }
+
+            @Override
+            public void commandUndone(UndoRedoHandler.CommandUndoneEvent e) {
+                verifyExistence();
+            }
+
+            @Override
+            public void commandRedone(UndoRedoHandler.CommandRedoneEvent e) {
+                verifyExistence();
+            }
+
+            private void verifyExistence() {
+                if (way.isDeleted()) unClick(w, mv);
+            }
+        });
+
+        // </editor-fold>
+    }
+
+    private static void unClick(Window w, MapView mv) {
+        w.setVisible(false);
+        mv.repaint();
+    }
 
     // </editor-fold>
 }

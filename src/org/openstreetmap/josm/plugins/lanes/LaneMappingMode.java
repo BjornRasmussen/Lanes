@@ -40,6 +40,8 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     private List<RoadRenderer> roadSegments = null;
     private MapView _mv;
 
+    private long selected = 0L;
+
     public Map<Long, RoadRenderer> wayIdToRSR = new HashMap<>();
 
     public LaneMappingMode(MapFrame mapFrame) {
@@ -51,11 +53,13 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
     @Override
     public void paint(Graphics2D g, MapView mv, Bounds bbox) {
+        if (mv.getScale() > 8) return; // Don't render when the map is too zoomed out
+
         double cushion = 200;
         _mv = mv;
 
         // Get map data for rendering:
-        if (roadSegments == null) roadSegments = getAllRoadSegments(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), mv);
+        ensureRoadSegmentsNotNull();
 
         // Get bounds where rendering should happen
         ProjectionBounds bounds = mv.getProjectionBounds();
@@ -130,6 +134,10 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Building RoadSegmentRenderers">
 
+    private void ensureRoadSegmentsNotNull() {
+        if (roadSegments == null) roadSegments = getAllRoadSegments(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
+    }
+
     private List<RoadRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
         wayIdToRSR = new HashMap<>();
         List<RoadRenderer> output = new ArrayList<>();
@@ -178,14 +186,23 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     // </editor-fold>
 
     // <editor-fold desc="Methods for Handling Mouse Events">
+
+    public void setSelected(long uniqueWayId) {
+        selected = uniqueWayId;
+        if (selected == 0L) {
+            MainApplication.getLayerManager().getActiveData().clearSelection();
+        } else {
+            MainApplication.getLayerManager().getActiveData().setSelected(wayIdToRSR.get(uniqueWayId).getWay());
+        }
+    }
+
     @Override
-    public void mouseClicked(MouseEvent e) {
-//        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
-//        RoadSegmentRenderer r = getShortestSegmentMouseEvent(e);
+    public void mousePressed(MouseEvent e) {
+//        ensureRoadSegmentsNotNull();
+//        RoadRenderer r = getShortestSegmentMouseEvent(e);
 //        if (r != null) {
-//            r.mouseClicked(e);
+//            r.mousePressed(e);
 //        } else {
-//            RoadSegmentRenderer.selected = "";
 //            MainApplication.getLayerManager().getActiveData().clearSelection();
 //        }
 //        _mv.repaint();
@@ -199,7 +216,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     public void mouseExited(MouseEvent e) {}
 
     @Override
-    public void mousePressed(MouseEvent e) {}
+    public void mouseClicked(MouseEvent e) {}
 
     @Override
     public void mouseDragged(MouseEvent e) {}
@@ -212,13 +229,13 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     // </editor-fold>
 
     private RoadRenderer getShortestSegmentMouseEvent(MouseEvent e) {
-//        RoadRenderer min = null;
-//        if (roadSegments == null) roadSegments = getAllRoadSegments(getWays(), _mv);
-//        for (RoadRenderer r : roadSegments) {
-//            if (r.mouseEventIsInside(e) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
-//        }
-//        return min;
-        return null;
+        ensureRoadSegmentsNotNull();
+
+        RoadRenderer min = null;
+        for (RoadRenderer r : roadSegments) {
+            if (Utils.mouseEventIsInside(e, r.getAsphaltOutlinePixels(), _mv) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
+        }
+        return min;
     }
 
     // </editor-fold>

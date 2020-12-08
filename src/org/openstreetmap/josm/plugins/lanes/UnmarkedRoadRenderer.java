@@ -4,6 +4,7 @@ import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.util.List;
 
 public class UnmarkedRoadRenderer extends RoadRenderer {
@@ -46,6 +47,11 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
                 segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
     }
 
+    @Override
+    protected void makePopup(MouseEvent e) {
+        Utils.displayPopup(getLayoutPopupContent(), e, _mv, getWay());
+    }
+
     private double getWidth() {
         double defaultWidth = 2 * Utils.WIDTH_LANES;;
         try {
@@ -64,4 +70,6 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
             return defaultWidth;
         }
     }
+
+
 }

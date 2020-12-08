@@ -6,6 +6,7 @@ import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -47,6 +48,11 @@ public class UntaggedRoadRenderer extends RoadRenderer {
         return Utils.getParallel(waySegment, 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2),
                 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2), false,
                 segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
+    }
+
+    @Override
+    protected void makePopup(MouseEvent e) {
+        Utils.displayPopup(getLayoutPopupContent(), e, _mv, getWay());
     }
 
     private boolean oneway() {

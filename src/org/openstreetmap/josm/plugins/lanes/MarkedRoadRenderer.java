@@ -11,6 +11,7 @@ import org.openstreetmap.josm.gui.util.GuiHelper;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.List;
@@ -42,7 +43,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
     protected MarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
         super(w, mv, parent);
 
-        try { createRoadLayout(); } catch (Exception e) { _isValid = false; }
+        try { createRoadLayout(); } catch (Exception e) { _isValid = false; _alignment = w; }
     }
 
     @Override
@@ -51,7 +52,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
     public void render(Graphics2D g) {
-
         if (!_isValid) {
             // Get the centre line of the road to be rendered.
             int[] pointXs = new int[_way.getNodesCount()];
@@ -472,6 +472,8 @@ public class MarkedRoadRenderer extends RoadRenderer {
             otherStartAngle = getOtherAngle(true);
             otherEndAngle = getOtherAngle(false);
             getPlacementInformation();
+        } else {
+            _alignment = getWay();
         }
     }
 
@@ -587,40 +589,20 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Handling Mouse Events">
 
-    private void generateClickBoxes() {
-        Way leftEdge = Utils.getParallel(_alignment, _offsetToLeftStart, _offsetToLeftEnd, false, otherStartAngle, otherEndAngle);
-        Way rightEdge = Utils.getParallel(_alignment, _offsetToLeftStart - getWidth(true),
-                _offsetToLeftEnd - getWidth(false), false, otherStartAngle, otherEndAngle);
-        List<Node> outline = leftEdge.getNodes();
-        for (int i = rightEdge.getNodesCount()-1; i >= 0; i--) {
-            outline.add(rightEdge.getNode(i));
-        }
-        outline.add(leftEdge.getNode(0));
-        _outline = new Way();
-        _outline.setNodes(outline);
-    }
-
     public boolean mouseEventIsInside(MouseEvent e) {
-        int[] xPoints = new int[_outline.getNodesCount()];
-        int[] yPoints = new int[xPoints.length];
-
-        for (int i = 0; i < _outline.getNodesCount(); i++) {
-            xPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getX() + 0.5);
-            yPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getY() + 0.5);
-        }
-
-        return new Polygon(xPoints, yPoints, xPoints.length).contains(e.getPoint());
+        for (Polygon p : getAsphaltOutlinePixels()) if (p.contains(e.getPoint())) return true;
+        return false;
     }
 
-    public void mouseClicked(MouseEvent e) {
-//        RoadPiece r = getSubPieceInside(e);
-//        if (r != null) r.mouseClicked(e);
+    public void makePopup(MouseEvent e) {
+        // Show lane pop-up.
+        Utils.displayPopup(getLanePopupContent(), e, _mv, getWay());
     }
 
-//    private RoadPiece getSubPieceInside(MouseEvent e) {
-//        for (RoadPiece r : getRoadPieces(false)) if (r.mouseEventIsInside(e)) return r;
-//        return null;
-//    }
+    private RoadPiece getSubPieceInside(MouseEvent e) {
+        for (RoadPiece r : getRoadPieces(false)) if (Utils.mouseEventIsInside(e, r.getAsphaltOutlines(), _mv)) return r;
+        return null;
+    }
 
     // </editor-fold>
 }

@@ -5,7 +5,9 @@ import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 
+import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -127,14 +129,12 @@ public abstract class RoadRenderer {
             if (w.getUniqueId() == _way.getUniqueId() || !_parent.wayIdToRSR.containsKey(w.getUniqueId())) continue;
             otherWay = _parent.wayIdToRSR.get(w.getUniqueId()).getAlignment();
             numValidWays++;
-//            JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be valid");
             // Check to ensure that pivot is only part of w at one of the endpoints.
             int numConnections = 0;
             for (int i = 0; i < w.getNodesCount(); i++) {
                 if (w.getNode(i).getUniqueId() != pivot.getUniqueId()) continue;
                 numConnections++;
                 if (i!=0 && i!=w.getNodesCount()-1) {
-//                    JOptionPane.showMessageDialog(_mv, "Way with id " + _way.getUniqueId() + " at node " + pivot.getUniqueId() + " has found other way " + w.getUniqueId() + " to be not valid node pos");
                     somethingIsNotValid = true;
                 }
                 otherWayStartsHere = i==0;
@@ -143,9 +143,10 @@ public abstract class RoadRenderer {
                 somethingIsNotValid = true;
             }
         }
-        if (numValidWays != 1) {
+        if (numValidWays != 1 || otherWay == null) {
             somethingIsNotValid = true;
         }
+
         if (somethingIsNotValid) {
             return (getThisAngle(start) + Math.PI) % (2*Math.PI);
         } else {
@@ -174,7 +175,7 @@ public abstract class RoadRenderer {
         g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
 
-    private List<Polygon> getAsphaltOutlinePixels() {
+    public List<Polygon> getAsphaltOutlinePixels() {
         if (_asphalt == null) _asphalt = getAsphaltOutlineCoords();
 
         List<Polygon> output = new ArrayList<>();
@@ -192,7 +193,7 @@ public abstract class RoadRenderer {
         return output;
     }
 
-    private List<Way> getAsphaltOutlineCoords() {
+    public List<Way> getAsphaltOutlineCoords() {
         List<Way> output = new ArrayList<>();
         for (int i = 0; i < startPoints.size(); i++) {
             double start = Math.max(startPoints.get(i), 0);
@@ -219,6 +220,49 @@ public abstract class RoadRenderer {
             thisSegment.setNodes(points);
             output.add(thisSegment);
         }
+        return output;
+    }
+
+    // </editor-fold>
+
+    // <editor-fold defaultstate=collapsed desc="Methods for Mouse Handling">
+
+    public void mousePressed(MouseEvent e) {
+        // Ensure it's a left click:
+        if (!SwingUtilities.isLeftMouseButton(e)) return;
+
+        // Check to make sure event is inside of rendered asphalt:
+        boolean inside = false;
+        for (Polygon p : getAsphaltOutlinePixels()) {
+            if (p.contains(e.getPoint())) {
+                inside = true;
+                break;
+            }
+        }
+        if (!inside) return;
+
+        // Set selected
+        _parent.setSelected(_way.getUniqueId());
+
+        // Call child method
+        makePopup(e);
+    }
+
+    protected abstract void makePopup(MouseEvent e);
+
+    protected JPanel getLayoutPopupContent() {
+        // Returns lane layout editor which can edit number of lanes and whether there are lane markings.
+        JPanel output = new JPanel();
+        output.setLayout(new GridLayout(0, 4));
+        output.add(new JLabel("layout"));
+        return output;
+    }
+
+    protected JPanel getLanePopupContent() {
+        // Returns popup for specific lane.
+        JPanel output = new JPanel();
+        output.setLayout(new GridLayout(0, 4));
+        output.add(new JLabel("lane"));
         return output;
     }
 

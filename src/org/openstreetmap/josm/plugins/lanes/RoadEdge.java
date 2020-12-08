@@ -24,6 +24,6 @@ public class RoadEdge extends RoadPiece {
                 Utils.shoulderLineColor.get(country) : Utils.shoulderLineColor.get("default");
 
         Utils.renderRoadLine(g, _mv, _parent, 0, 0, _offsetStart, _offsetEnd, Utils.DividerType.SOLID,
-                (_way.isOneway() == 1 && _direction == -1) ? Color.YELLOW : Color.WHITE);
+                (Utils.isOneway(_way) && _direction == -1) ? Color.YELLOW : Color.WHITE);
     }
 }

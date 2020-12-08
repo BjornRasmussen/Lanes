@@ -1,5 +1,6 @@
 default: 3.5
 CA: 3.5
+DA: 3.3
 FR: 3.5
 NO: 3.3
 SE: 3.4

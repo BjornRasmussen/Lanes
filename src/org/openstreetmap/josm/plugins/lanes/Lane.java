@@ -43,13 +43,25 @@ public class Lane extends RoadPiece {
     }
 
     @Override
-    void render(Graphics2D g) {
+    public void render(Graphics2D g) {
         if (_direction == 0) {
             Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false),
                     _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
         }
         renderTurnMarkings(g);
     }
+
+    @Override
+    void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter) {
+        if (_direction == 0) {
+            double offsetStart = _offsetStart-(_parent._offsetToLeftStart - _parent.getWidth(true)/2);
+            double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - _parent.getWidth(false)/2);
+            Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
+            Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
+        }
+    }
+
 
     public String getChange() {
         String output = "";
@@ -285,7 +297,7 @@ public class Lane extends RoadPiece {
 
         List<String> turns = new ArrayList<>();
         Collections.addAll(turns, turn.split(";"));
-        boolean lr = _mv.getScale() > 0.1;
+        boolean lr = _mv.getScale() > 0.2;
         if (turns.contains("left")) drawImageAt(g, lr ? Utils.lr_left : Utils.left, x, y, width, rotationRadians);
         if (turns.contains("right")) drawImageAt(g, lr ? Utils.lr_right : Utils.right, x, y, width, rotationRadians);
         if (turns.contains("slight_left")) drawImageAt(g, lr ? Utils.lr_slightLeft : Utils.slightLeft, x, y, width, rotationRadians);
@@ -302,12 +314,6 @@ public class Lane extends RoadPiece {
         g.rotate(rotationRadians, x+size/2, y+size/2);
         g.drawImage(image, x, y, size, size, null); //rotate(toBufferedImage(image), rotationRadians)
         g.rotate(-rotationRadians, x+size/2, y+size/2);
-    }
-
-    private GraphicsConfiguration getDefaultConfiguration() {
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        GraphicsDevice gd = ge.getDefaultScreenDevice();
-        return gd.getDefaultConfiguration();
     }
 
     public BufferedImage toBufferedImage(Image img) {

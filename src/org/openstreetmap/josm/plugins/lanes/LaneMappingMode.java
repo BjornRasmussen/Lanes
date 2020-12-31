@@ -25,6 +25,7 @@ import org.openstreetmap.josm.data.Bounds;
 import org.openstreetmap.josm.data.ProjectionBounds;
 import org.openstreetmap.josm.data.UndoRedoHandler;
 import org.openstreetmap.josm.data.osm.*;
+import org.openstreetmap.josm.data.projection.proj.Proj;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
@@ -33,13 +34,14 @@ import org.openstreetmap.josm.gui.layer.MapViewPaintable;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 import org.openstreetmap.josm.tools.Shortcut;
 
+import javax.swing.event.ChangeListener;
+
 public class LaneMappingMode extends MapMode implements MouseListener, MouseMotionListener,
         MapViewPaintable, UndoRedoHandler.CommandQueuePreciseListener {
 
-//    private List<TagWithValues> tagsForRendering = null;
-    private List<RoadRenderer> roadSegments = null;
+    private List<RoadRenderer> roads = null;
     private MapView _mv;
-
+    private List<ChangeListener> _listeners = new ArrayList<>();
     private long selected = 0L;
 
     public Map<Long, RoadRenderer> wayIdToRSR = new HashMap<>();
@@ -54,6 +56,8 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     @Override
     public void paint(Graphics2D g, MapView mv, Bounds bbox) {
         if (mv.getScale() > 8) return; // Don't render when the map is too zoomed out
+
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         double cushion = 200;
         _mv = mv;
@@ -70,27 +74,27 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
 
         // Render each road
-        for (RoadRenderer r : roadSegments) {
-            if (wayShouldBeRendered(bounds, r.getWay())) r.render(g);
+        for (RoadRenderer r : roads) {
+            if (wayShouldBeRendered(bounds, r.getWay())) {
+                r.render(g);
+            }
         }
 
         // Render intersections
-        // TODO
+//        for (IntersectionRenderer i : intersections) {
+//            if (intersectionShouldBeRendered(bounds, i)) i.render(g);
+//        }
     }
 
     @Override
     public void enterMode() {
         super.enterMode();
-//        tagsForRendering = autofillTagsForRendering();
-        roadSegments = null;
+        roads = null;
 
         if (getLayerManager().getEditDataSet() == null) return;
 
-//        getLayerManager().getActiveLayer().setVisible(false); TODO uncomment to hide other data when editing lanes.
-
         MapFrame map = MainApplication.getMap();
         map.mapView.addMouseListener(this);
-//        map.mapView.addMouseMotionListener(this);
         map.mapView.addTemporaryLayer(this);
         UndoRedoHandler.getInstance().addCommandQueuePreciseListener(this);
         updateStatusLine();
@@ -100,15 +104,17 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     public void exitMode() {
         super.exitMode();
 
-//        if (getLayerManager().getActiveLayer() != null) getLayerManager().getActiveLayer().setVisible(true); TODO uncomment in future
-
         MapFrame map = MainApplication.getMap();
         map.mapView.removeMouseListener(this);
-//        map.mapView.removeMouseMotionListener(this);
         map.mapView.removeTemporaryLayer(this);
-        UndoRedoHandler.getInstance().removeCommandQueuePreciseListener(this);
-//        map.keyDetector.removeKeyListener(this);
-//        map.keyDetector.removeModifierExListener(this);
+        try { UndoRedoHandler.getInstance().removeCommandQueuePreciseListener(this); } catch (Exception ignored) {}
+        for (ChangeListener c : _listeners) c.stateChanged(null);
+        _listeners = new ArrayList<>();
+    }
+
+    // Popups can add listeners here so they close when the user leaves the mode.
+    public void addQuitListener(ChangeListener c) {
+        _listeners.add(c);
     }
 
     // <editor-fold defaultstate="collapsed" desc="Boring Methods">
@@ -130,12 +136,26 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         }
         return false; // TODO also return true if the way intersects bounds at all.
     }
+
+    private boolean intersectionShouldBeRendered(ProjectionBounds bounds, IntersectionRenderer i) {
+        double minEast = bounds.minEast - 100;
+        double maxEast = bounds.maxEast + 100;
+        double minNorth = bounds.minNorth - 100;
+        double maxNorth = bounds.maxNorth + 100;
+
+        ProjectionBounds bigger = new ProjectionBounds(minEast, minNorth, maxEast, maxNorth);
+        return bigger.contains(new Node(i.getPos()).getEastNorth());
+    }
+
     // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Building RoadSegmentRenderers">
 
     private void ensureRoadSegmentsNotNull() {
-        if (roadSegments == null) roadSegments = getAllRoadSegments(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
+        if (roads == null/* || intersections == null*/) {
+            roads = getAllRoadSegments(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
+//            intersections = getAllIntersections(_mv);
+        }
     }
 
     private List<RoadRenderer> getAllRoadSegments(List<Way> ways, MapView mv) {
@@ -153,6 +173,20 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         }
 
         return output;
+    }
+
+    private List<IntersectionRenderer> getAllIntersections(MapView mv) {
+        List<IntersectionRenderer> intersections = new ArrayList<>();
+        Set<Long> nodeIds = new HashSet<>();
+        for (RoadRenderer r : roads) {
+            for (Node n : r.getWay().getNodes()) {
+                if (!nodeIds.contains(n.getUniqueId()) && Utils.nodeShouldBeIntersection(n, this)) {
+                    intersections.add(new IntersectionRenderer(n, _mv, this));
+                    nodeIds.add(n.getUniqueId());
+                }
+            }
+        }
+        return intersections;
     }
 
     // </editor-fold>
@@ -180,7 +214,8 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     }
 
     private void updateDataset() {
-        roadSegments = null;
+        roads = null;
+//        intersections = null;
     }
 
     // </editor-fold>
@@ -198,14 +233,14 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
     @Override
     public void mousePressed(MouseEvent e) {
-//        ensureRoadSegmentsNotNull();
-//        RoadRenderer r = getShortestSegmentMouseEvent(e);
-//        if (r != null) {
-//            r.mousePressed(e);
-//        } else {
-//            MainApplication.getLayerManager().getActiveData().clearSelection();
-//        }
-//        _mv.repaint();
+        ensureRoadSegmentsNotNull();
+        RoadRenderer r = getShortestSegmentMouseEvent(e);
+        if (r != null) {
+            r.mousePressed(e);
+        } else {
+            MainApplication.getLayerManager().getActiveData().clearSelection();
+        }
+        _mv.repaint();
     }
 
     // <editor-fold defaultstate="collapsed" desc="Unused mouse listener methods">
@@ -232,8 +267,12 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         ensureRoadSegmentsNotNull();
 
         RoadRenderer min = null;
-        for (RoadRenderer r : roadSegments) {
-            if (Utils.mouseEventIsInside(e, r.getAsphaltOutlinePixels(), _mv) && (min == null || r.getWay().getLength() < min.getWay().getLength())) min = r;
+        for (RoadRenderer r : roads) {
+            try {
+                if (Utils.mouseEventIsInside(e, r.getAsphaltOutlinePixels(), _mv) && (min == null || r.getWay().getLength() < min.getWay().getLength())) {
+                    min = r;
+                }
+            } catch (Exception ignored) {} // When the alignment is invalid, aka it goes from 0 to 21 lanes wide in 10 meters, this catches the exception.
         }
         return min;
     }

@@ -26,4 +26,16 @@ public class RoadEdge extends RoadPiece {
         Utils.renderRoadLine(g, _mv, _parent, 0, 0, _offsetStart, _offsetEnd, Utils.DividerType.SOLID,
                 (Utils.isOneway(_way) && _direction == -1) ? Color.YELLOW : Color.WHITE);
     }
+
+    @Override
+    void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter) {
+        double offsetStart = _offsetStart-(_parent._offsetToLeftStart - (_parent.getWidth(true))/2);
+        double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - (_parent.getWidth(false))/2);
+
+        Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
+        Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
+
+        Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false),
+                pixelsPerMeter, Utils.DividerType.SOLID, (Utils.isOneway(_way) && _direction == -1) ? Color.YELLOW : Color.WHITE);
+    }
 }

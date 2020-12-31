@@ -44,6 +44,7 @@ public abstract class RoadRenderer {
 
     // Renders to road to g, always called by LaneMappingMode.
     abstract void render(Graphics2D g);
+    abstract void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter);
 
     // For getting the OSM way that the RoadRenderer is modeled after.
     public Way getWay() { return _way; }
@@ -51,6 +52,9 @@ public abstract class RoadRenderer {
     // For getting a different version of _way that's parallel to the lanes.
     // Only different from _way when the way has different placement at start/end.
     abstract Way getAlignment();
+
+    // Width in meters, doesn't care about placement.
+    abstract double getWidth(boolean start);
 
     // For getting alignment split up by road segment.
     public List<Way> getAlignments() {
@@ -69,7 +73,9 @@ public abstract class RoadRenderer {
         return output;
     }
 
-    // Get edge methods.  Return edge of rendering, aka 0.3 meters more than actual edge.
+    // Get edge methods.  Return edge of rendering, aka like 0.3 meters more than actual edge.
+    public Way getLeftEdge() { return getLeftEdge(null, 0); }
+    public Way getRightEdge() { return getRightEdge(null, 0); }
     abstract Way getLeftEdge(Way waySegment, int segment);
     abstract Way getRightEdge(Way waySegment, int segment);
 
@@ -77,20 +83,25 @@ public abstract class RoadRenderer {
     //  RoadRenderers without having to worry about which kind is created.
     public static RoadRenderer buildRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
         if (!wayHasRoadTags(w) && !wayHasLaneTags(w)) return null;
+        if (w.getNodesCount() == 0 || !w.isVisible()) return null;
 
         if (w.hasTag("lane_markings", "no")) {
             return new UnmarkedRoadRenderer(w, mv, parent);
         } else if (wayHasLaneTags(w)) {
-            return new MarkedRoadRenderer(w, mv, parent);
+            MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, parent);
+            if (mrr._isValid) {
+                return mrr;
+            } else {
+                return new UntaggedRoadRenderer(w, mv, parent, false);
+            }
         } else {
-            return new UntaggedRoadRenderer(w, mv, parent);
+            return new UntaggedRoadRenderer(w, mv, parent, true);
         }
     }
 
     // <editor-fold defaultstate=collapsed desc="Methods for Angles and Alignments">
 
     public void updateAlignment() {
-        // Recalculate alignment, this time using nearby ways for the angle.
         otherStartAngle = getOtherAngle(true);
         otherEndAngle = getOtherAngle(false);
     }
@@ -147,19 +158,25 @@ public abstract class RoadRenderer {
             somethingIsNotValid = true;
         }
 
-        if (somethingIsNotValid) {
-            return (getThisAngle(start) + Math.PI) % (2*Math.PI);
-        } else {
-            Node secondToLast = otherWayStartsHere ? otherWay.getNode(1) : otherWay.getNode(otherWay.getNodesCount() - 2);
-            Node last = otherWayStartsHere ? otherWay.getNode(0) : otherWay.getNode(otherWay.getNodesCount() - 1);
-            return last.getCoor().bearing(secondToLast.getCoor());
+        if (!somethingIsNotValid) {
+            try {
+                Node secondToLast = otherWayStartsHere ? otherWay.getNode(1) : otherWay.getNode(otherWay.getNodesCount() - 2);
+                Node last = otherWayStartsHere ? otherWay.getNode(0) : otherWay.getNode(otherWay.getNodesCount() - 1);
+                return last.getCoor().bearing(secondToLast.getCoor());
+            } catch (NullPointerException ignored) {}
         }
+
+        return (getThisAngle(start) + Math.PI) % (2*Math.PI);
     }
 
     public double getThisAngle(boolean start) {
-        Node first = start ? getAlignment().getNode(0) : getAlignment().getNode(getAlignment().getNodesCount() - 1);
-        Node second = start ? getAlignment().getNode(1) : getAlignment().getNode(getAlignment().getNodesCount() - 2);
-        return first.getCoor().bearing(second.getCoor());
+        try {
+            Node first = start ? getAlignment().getNode(0) : getAlignment().getNode(getAlignment().getNodesCount() - 1);
+            Node second = start ? getAlignment().getNode(1) : getAlignment().getNode(getAlignment().getNodesCount() - 2);
+            return first.getCoor().bearing(second.getCoor());
+        } catch (Exception e) {
+            return Double.NaN;
+        }
     }
 
     // </editor-fold>
@@ -175,21 +192,42 @@ public abstract class RoadRenderer {
         g.setStroke(GuiHelper.getCustomizedStroke("0"));
     }
 
+    protected void renderAsphaltPopup(Graphics2D g, Color color, Point center, double bearing, double distOut, double pixelsPerMeter) {
+        g.setColor(color);
+        Point start = Utils.goInDirection(center, bearing+Math.PI, distOut);
+        Point startLeft = Utils.goInDirection(start, bearing-Math.PI/2, pixelsPerMeter*(getWidth(true) + Utils.RENDERING_WIDTH_DIVIDER)/2 + 1);
+        Point startRight = Utils.goInDirection(start, bearing+Math.PI/2, pixelsPerMeter*(getWidth(true) + Utils.RENDERING_WIDTH_DIVIDER)/2 + 1);
+        Point end = Utils.goInDirection(center, bearing, distOut);
+        Point endLeft = Utils.goInDirection(end, bearing-Math.PI/2, pixelsPerMeter*(getWidth(false) + Utils.RENDERING_WIDTH_DIVIDER)/2 + 1);
+        Point endRight = Utils.goInDirection(end, bearing+Math.PI/2, pixelsPerMeter*(getWidth(false) + Utils.RENDERING_WIDTH_DIVIDER)/2 + 1);
+
+        g.fillPolygon(new int[] {startLeft.x, startRight.x, endRight.x, endLeft.x, startLeft.x},
+                      new int[] {startLeft.y, startRight.y, endRight.y, endLeft.y, startLeft.y}, 5);
+
+        g.setColor(new Color(0, 0, 0, 0));
+        g.setStroke(GuiHelper.getCustomizedStroke("0"));
+    }
+
+    protected void renderRoadEdgesPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter, boolean tagged) {
+        Color left = Utils.isRightHand(getWay()) && Utils.isOneway(getWay()) && tagged ? Utils.DEFAULT_CENTRE_DIVIDER_COLOR : Utils.DEFAULT_DIVIDER_COLOR;
+        Color right = !Utils.isRightHand(getWay()) && Utils.isOneway(getWay()) && tagged ? Utils.DEFAULT_CENTRE_DIVIDER_COLOR : Utils.DEFAULT_DIVIDER_COLOR;
+
+        Point start = Utils.goInDirection(center, bearing+Math.PI, distOut);
+        Point startLeft = Utils.goInDirection(start, bearing-Math.PI/2, pixelsPerMeter*(getWidth(true))/2 + 1);
+        Point startRight = Utils.goInDirection(start, bearing+Math.PI/2, pixelsPerMeter*(getWidth(true))/2 + 1);
+        Point end = Utils.goInDirection(center, bearing, distOut);
+        Point endLeft = Utils.goInDirection(end, bearing-Math.PI/2, pixelsPerMeter*(getWidth(false))/2 + 1);
+        Point endRight = Utils.goInDirection(end, bearing+Math.PI/2, pixelsPerMeter*(getWidth(false))/2 + 1);
+
+        Utils.renderRoadLinePopup(g, startLeft, endLeft, bearing, 0, 0, pixelsPerMeter, Utils.DividerType.SOLID, left);
+        Utils.renderRoadLinePopup(g, startRight, endRight, bearing, 0, 0, pixelsPerMeter, Utils.DividerType.SOLID, right);
+    }
+
     public List<Polygon> getAsphaltOutlinePixels() {
         if (_asphalt == null) _asphalt = getAsphaltOutlineCoords();
 
         List<Polygon> output = new ArrayList<>();
-        for (Way asphalt : _asphalt) {
-            int[] xPoints = new int[asphalt.getNodesCount()];
-            int[] yPoints = new int[xPoints.length];
-
-            for (int i = 0; i < asphalt.getNodesCount(); i++) {
-                xPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getX() + 0.5);
-                yPoints[i] = (int) (_mv.getPoint(asphalt.getNode(i).getCoor()).getY() + 0.5);
-            }
-
-            output.add(new Polygon(xPoints, yPoints, xPoints.length));
-        }
+        for (Way asphalt : _asphalt) output.add(Utils.wayToPolygon(asphalt, _mv));
         return output;
     }
 
@@ -248,22 +286,8 @@ public abstract class RoadRenderer {
         makePopup(e);
     }
 
-    protected abstract void makePopup(MouseEvent e);
-
-    protected JPanel getLayoutPopupContent() {
-        // Returns lane layout editor which can edit number of lanes and whether there are lane markings.
-        JPanel output = new JPanel();
-        output.setLayout(new GridLayout(0, 4));
-        output.add(new JLabel("layout"));
-        return output;
-    }
-
-    protected JPanel getLanePopupContent() {
-        // Returns popup for specific lane.
-        JPanel output = new JPanel();
-        output.setLayout(new GridLayout(0, 4));
-        output.add(new JLabel("lane"));
-        return output;
+    public void makePopup(MouseEvent e) {
+        Utils.displayPopup(new LaneLayoutPopup(this), e, _mv, getWay(), _parent);
     }
 
     // </editor-fold>
@@ -278,7 +302,8 @@ public abstract class RoadRenderer {
                 way.hasTag("access:lanes") || way.hasTag("access:lanes:forward") || way.hasTag("access:lanes:backward") ||
                 way.hasTag("psv:lanes") || way.hasTag("psv:lanes:forward") || way.hasTag("psv:lanes:backward") ||
                 way.hasTag("surface:lanes") || way.hasTag("surface:lanes:forward") || way.hasTag("surface:lanes:backward") ||
-                way.hasTag("bus:lanes") || way.hasTag("bus:lanes:forward") || way.hasTag("bus:lanes:backward")));
+                way.hasTag("bus:lanes") || way.hasTag("bus:lanes:forward") || way.hasTag("bus:lanes:backward")) ||
+                way.hasTag("lane_markings", "no"));
     }
 
     private static boolean wayHasRoadTags(Way way) {

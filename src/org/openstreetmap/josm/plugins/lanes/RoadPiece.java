@@ -1,5 +1,6 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
 
@@ -20,8 +21,6 @@ abstract class RoadPiece {
     protected MapView _mv;
     protected Way _way;
     protected MarkedRoadRenderer _parent;
-
-    protected List<Way> _outlines = null;
 
     protected RoadPiece _left = null;
     protected RoadPiece _right = null;
@@ -52,6 +51,8 @@ abstract class RoadPiece {
 
     abstract void render(Graphics2D g);
 
+    abstract void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter);
+
     public boolean defaultChangeToThis() {
         return true;
     }
@@ -78,34 +79,26 @@ abstract class RoadPiece {
                     false, _parent.otherStartAngle, _parent.otherEndAngle);
             Way right = Utils.getParallel(subpart, startOffset - (widthStart / 2.0), endOffset - (widthEnd / 2.0),
                     false, _parent.otherStartAngle, _parent.otherEndAngle);
+            List<Node> outline = new ArrayList<>();
 
-            int[] xPoints = new int[left.getNodesCount() + right.getNodesCount() + 1];
-            int[] yPoints = new int[xPoints.length];
+            for (int j = 0; j < left.getNodesCount(); j++) outline.add(left.getNode(j));
 
-            for (int j = 0; j < left.getNodesCount(); j++) {
-                xPoints[j] = (int) (_mv.getPoint(left.getNode(j).getCoor()).getX() + 0.5);
-                yPoints[j] = (int) (_mv.getPoint(left.getNode(j).getCoor()).getY() + 0.5);
-            }
+            for (int j = 0; j < right.getNodesCount(); j++) outline.add(right.getNode(right.getNodesCount() - j - 1));
 
-            for (int j = 0; j < right.getNodesCount(); j++) {
-                xPoints[j + left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount() - j - 1).getCoor()).getX() + 0.5);
-                yPoints[j + left.getNodesCount()] = (int) (_mv.getPoint(right.getNode(right.getNodesCount() - j - 1).getCoor()).getY() + 0.5);
-            }
-
-            xPoints[left.getNodesCount() * 2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getX() + 0.5);
-            yPoints[left.getNodesCount() * 2] = (int) (_mv.getPoint(left.getNode(0).getCoor()).getY() + 0.5);
-            output.add(new Polygon(xPoints, yPoints, xPoints.length));
+            outline.add(left.getNode(0));
+            Way outlineWay = new Way();
+            outlineWay.setNodes(outline);
+            output.add(Utils.wayToPolygon(outlineWay, _mv));
         }
         return output;
     }
-
 
     // <editor-fold desc="Mouse Listeners">
 
     public void mouseClicked(MouseEvent e) {
         if (!SwingUtilities.isLeftMouseButton(e)) return;
 
-        Utils.displayPopup(getPopupContent(), e, _mv, _way);
+        Utils.displayPopup(getPopupContent(), e, _mv, _way, _parent._parent);
     }
 
     protected JPanel getPopupContent() {

@@ -1,11 +1,14 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import jdk.jfr.Percentage;
 import org.openstreetmap.josm.command.ChangeCommand;
 import org.openstreetmap.josm.command.Command;
 import org.openstreetmap.josm.command.SequenceCommand;
 import org.openstreetmap.josm.data.UndoRedoHandler;
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
+import org.openstreetmap.josm.gui.MainApplication;
+import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 
@@ -25,8 +28,8 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     public static String selected = "";
 
-    private double _offsetToLeftStart; // Distance between left side of road and the centre of the way.
-    private double _offsetToLeftEnd;
+    public double _offsetToLeftStart; // Distance between left side of road and the centre of the way.
+    public double _offsetToLeftEnd;
 
     public final List<RoadPiece> _forwardLanes = new ArrayList<>();
     public final List<RoadPiece> _forwardDividers = new ArrayList<>();
@@ -82,6 +85,15 @@ public class MarkedRoadRenderer extends RoadRenderer {
                 roadPiece.render(g);
             }
         } catch (Exception ignored) {} // Don't render roads that can't be rendered (due to crazy alignments or lanes that go from 0 to 1000 m wide in 10 m).
+    }
+
+    @Override
+    void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter) {
+        renderAsphaltPopup(g, Utils.POPUP_ASPHALT_COLOR, center, bearing, distOut, pixelsPerMeter);
+
+        for (RoadPiece p : getRoadPieces(true)) {
+            p.renderPopup(g, center, bearing, distOut, pixelsPerMeter);
+        }
     }
 
     // </editor-fold>
@@ -209,6 +221,9 @@ public class MarkedRoadRenderer extends RoadRenderer {
     private void getPlacementInformation() {
         _offsetToLeftStart = getPlacementAt(true, false);
         _offsetToLeftEnd = getPlacementAt(false, false);
+        if (Double.isNaN(_offsetToLeftEnd)) {
+            JOptionPane.showMessageDialog(MainApplication.getMainFrame(), "End is NaN");
+        }
         double placementDiff = getPlacementAt(false, true) - getPlacementAt(true, true);
         _alignment = Utils.getParallel(_way, 0, placementDiff, true, otherStartAngle, otherEndAngle);
         _offsetToLeftEnd -= placementDiff;
@@ -410,7 +425,8 @@ public class MarkedRoadRenderer extends RoadRenderer {
     }
 
 
-    private double getWidth(boolean start) {
+    @Override
+    public double getWidth(boolean start) {
         double output = -1 * Utils.RENDERING_WIDTH_DIVIDER; // To offset the shoulder width added to each side.
         for (RoadPiece piece : getRoadPieces(false)) {
             output += piece.getWidth(start);
@@ -443,7 +459,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
             output.add(_rightRoadEdge);
         }
         return output;
-    } // TODO MAKE PRIVATE
+    }
 
     private List<RoadPiece> getLanesAndDividers(List<RoadPiece> lanes, List<RoadPiece> dividers, int direction) {
         List<RoadPiece> output = new ArrayList<>();
@@ -479,16 +495,16 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     @Override
     public Way getLeftEdge(Way alignmentPart, int segment) {
-        return Utils.getParallel(alignmentPart, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
+        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
                 _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false,
-                segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
+                (segment==0 || alignmentPart == null) ? otherStartAngle : Double.NaN, (segment==startPoints.size()-1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
     }
 
     @Override
     public Way getRightEdge(Way alignmentPart, int segment) {
-        return Utils.getParallel(alignmentPart, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
+        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
                 _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false,
-                segment==0 ? otherStartAngle : Double.NaN, segment==startPoints.size()-1 ? otherEndAngle : Double.NaN);
+                (segment==0 || alignmentPart == null) ? otherStartAngle : Double.NaN, (segment==startPoints.size()-1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
     }
 
     // </editor-fold>
@@ -592,11 +608,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
     public boolean mouseEventIsInside(MouseEvent e) {
         for (Polygon p : getAsphaltOutlinePixels()) if (p.contains(e.getPoint())) return true;
         return false;
-    }
-
-    public void makePopup(MouseEvent e) {
-        // Show lane pop-up.
-        Utils.displayPopup(getLanePopupContent(), e, _mv, getWay());
     }
 
     private RoadPiece getSubPieceInside(MouseEvent e) {

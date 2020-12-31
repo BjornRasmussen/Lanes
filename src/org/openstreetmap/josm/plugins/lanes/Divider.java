@@ -1,6 +1,8 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
+import org.openstreetmap.josm.gui.util.GuiHelper;
 import org.openstreetmap.josm.tools.ImageProvider;
 
 import javax.swing.*;
@@ -64,6 +66,7 @@ public class Divider extends RoadPiece {
                 output = Utils.parseWidth(value);
             }
         } catch (Exception ignored) {}
+
         return output + Utils.RENDERING_WIDTH_DIVIDER;
     }
 
@@ -92,6 +95,38 @@ public class Divider extends RoadPiece {
             }
             Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
         }
+    }
+
+    @Override
+    void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter) {
+        double offsetStart = _offsetStart-(_parent._offsetToLeftStart - _parent.getWidth(true)/2);
+        double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - _parent.getWidth(false)/2);
+
+        Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
+        Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
+
+        if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
+        }
+        else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
+        }
+        else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
+        }
+        else {
+            if (_type == null) getDividerType();
+            Utils.DividerType type = _type;
+            if (_direction == -1) {
+                if (_type == Utils.DividerType.DASHED_FOR_RIGHT) type = Utils.DividerType.DASHED_FOR_LEFT;
+                if (_type == Utils.DividerType.DASHED_FOR_LEFT) type = Utils.DividerType.DASHED_FOR_RIGHT;
+            }
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
+        }
+
     }
 
     @Override

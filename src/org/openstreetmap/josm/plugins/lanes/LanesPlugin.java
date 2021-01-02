@@ -6,6 +6,11 @@ import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.plugins.Plugin;
 import org.openstreetmap.josm.plugins.PluginInformation;
 
+/*
+ * LanesPlugin class - entry point to program.
+ * -> Creates an instance of a LaneMappingMode when JOSM boots up.
+ */
+
 public class LanesPlugin extends Plugin {
 
     public LanesPlugin(PluginInformation info) {
@@ -15,7 +20,7 @@ public class LanesPlugin extends Plugin {
     @Override
     public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
         if (oldFrame == null && newFrame != null) {
-            MainApplication.getMap().addMapMode(new IconToggleButton(new LaneMappingMode(MainApplication.getMap())));
+            MainApplication.getMap().addMapMode(new IconToggleButton(new LaneMappingMode()));
         }
     }
 }

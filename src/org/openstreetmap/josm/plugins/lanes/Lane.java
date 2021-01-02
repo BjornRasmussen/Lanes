@@ -10,6 +10,16 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 
+/*
+ * Lane - stores information about a single lane in a MarkedRoadRenderer.
+ *
+ * -> The LanesPlugin class is only run when JOSM boots up.
+ * -> This class is for entering the lane mapping mode and handling all of the rendered roads.
+ * -> RoadRenderer is a class that represents 1 OSM way, and handles all rendering of that way.
+ *
+ * This class stores a list of RoadRenderers, and calls on each of them each time paint() is called.
+ */
+
 public class Lane extends RoadPiece {
 
     private String change = null;

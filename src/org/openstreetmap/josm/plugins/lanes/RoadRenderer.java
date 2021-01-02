@@ -2,6 +2,7 @@ package org.openstreetmap.josm.plugins.lanes;
 
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
+import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 
@@ -280,7 +281,7 @@ public abstract class RoadRenderer {
         if (!inside) return;
 
         // Set selected
-        _parent.setSelected(_way.getUniqueId());
+        MainApplication.getLayerManager().getActiveData().setSelected(_parent.wayIdToRSR.get(_way.getUniqueId()).getWay());
 
         // Call child method
         makePopup(e);

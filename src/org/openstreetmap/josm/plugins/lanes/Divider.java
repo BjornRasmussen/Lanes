@@ -1,8 +1,6 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
-import org.openstreetmap.josm.gui.util.GuiHelper;
 import org.openstreetmap.josm.tools.ImageProvider;
 
 import javax.swing.*;
@@ -12,6 +10,13 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.util.List;
+
+/*
+ * Divider - stores information about a divider between two lanes in a MarkedRoadRenderer.
+ *
+ * -> Renders and edits dividers.
+ * -> Handles most of the work surrounding change:lanes tagging.
+ */
 
 public class Divider extends RoadPiece {
     Utils.DividerType _type = null;

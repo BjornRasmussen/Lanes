@@ -10,6 +10,13 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/*
+ * IntersectionRenderer - renders and edits Intersections.
+ *
+ * -> Uses bezier curves and nearby RoadRenderers to render a 2D area around the intersection.
+ * -> Allows for connectivity relations to be viewed and edited using drag and drop pieces.
+ */
+
 public class IntersectionRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">

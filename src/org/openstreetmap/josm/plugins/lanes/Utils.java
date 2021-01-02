@@ -1,5 +1,6 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import com.sun.tools.javac.Main;
 import org.openstreetmap.josm.command.ChangeCommand;
 import org.openstreetmap.josm.command.ChangePropertyCommand;
 import org.openstreetmap.josm.command.Command;
@@ -828,9 +829,8 @@ public class Utils {
     public static void applyPreset(Preset p, Way w, boolean undoPrevFirst) {
         if (undoPrevFirst) UndoRedoHandler.getInstance().undo();
 
-        // w is existing way
         Collection<Command> cmds = new LinkedList<>();
-        Map<String, String> keys = getPresetTagsApplied(w.getKeys(), p, w);
+        Map<String, String> keys = getPresetTagsApplied(p, w);
 
         cmds.add(new ChangePropertyCommand(Collections.singletonList(w), keys));
 
@@ -838,7 +838,8 @@ public class Utils {
         UndoRedoHandler.getInstance().add(c);
     }
 
-    private static Map<String, String> getPresetTagsApplied(Map<String, String> keys, Preset p, Way w) {
+    private static Map<String, String> getPresetTagsApplied(Preset p, Way w) {
+        Map<String, String> keys = w.getKeys();
         Map<String, String> output = new HashMap<>();
         if (p.getLanesBackward() == 0 && p.getLanesForward() == 0) {
             for (String key : keys.keySet()) {
@@ -865,33 +866,76 @@ public class Utils {
             output.put("lane_markings", "no");
         } else {
             output.put("lane_markings", "yes");
-            output.put("lanes", "");
             output.put("width", "");
-            output.put(Utils.isOneway(w) ? "lanes" : "lanes:forward", "" + (p.getLanesForward() != 0 ? p.getLanesForward() : ""));
-            output.put("lanes:backward", "" + (p.getLanesBackward() != 0 ? p.getLanesBackward() : ""));
-            output.put("lanes:both_ways", "" + (((int) p.getLanesBothWays()) != 0 ? ((int) p.getLanesBothWays()) : ""));
+            output.putAll(setLanesInDirection(w, 1, p.getLanesForward()));
+            output.putAll(setLanesInDirection(w, 0, p.getLanesBothWays() > 0.1 ? 1 : 0));
+            output.putAll(setLanesInDirection(w, -1, p.getLanesBackward()));
+            output.put("lanes", "" + (p.getLanesForward() + p.getLanesBackward() + (p.getLanesBothWays() > 0.01 ? 1 : 0)));
+        }
+        return output;
+    }
 
-            for (String key : keys.keySet()) {
-                if (key.contains(":lanes") && !key.contains("note")) {
-                    int dir = 1;
-                    if (key.contains(":both_ways")) dir = 0;
-                    if (key.contains(":backward")) dir = -1;
+    public static void changeLaneCount(Way w, int dir, int newCount, int existingBackward, int existingForward, int existingBothWays) {
+        if (newCount == 0) return;
+        Collection<Command> cmds = new LinkedList<>();
+        Map<String, String> keys = setLanesInDirection(w, dir, newCount);
 
-                    int newLanes = dir == 1 ? p.getLanesForward() : dir == 0 ? (int) p.getLanesBothWays() : p.getLanesBackward();
-                    int numBars = numBars(key);
-                    if (numBars < newLanes) {
-                        int diff = numBars - newLanes;
-                        output.put(key, keys.get(key));
-                        for (int i = 0; i < diff; i++) output.put(key, output.get(key) + "|");
-                    } else if (numBars > newLanes) {
-                        String[] pieces = keys.get(key).split("\\|");
-                        StringBuilder newStr = new StringBuilder();
-                        for (int i = 0; i < newLanes; i++) {
-                            if (i != 0) newStr.append("|");
-                            newStr.append(pieces[i]);
-                        }
-                        output.put(key, newStr.toString());
+        int totalLanes = 0;
+        try {
+            if (keys.containsKey("lanes:forward")) {
+                totalLanes += Integer.parseInt(keys.get("lanes:forward"));
+            } else if (dir != 1) {
+                totalLanes += existingForward;
+                keys.put("lanes:forward", ""+(existingForward != 0 ? existingForward : ""));
+            }
+            if (keys.containsKey("lanes:backward")) {
+                totalLanes += Integer.parseInt(keys.get("lanes:backward"));
+            } else if (dir != -1) {
+                totalLanes += existingBackward;
+                keys.put("lanes:backward", ""+(existingBackward != 0 ? existingBackward : ""));
+            }
+            if (keys.containsKey("lanes:both_ways")) {
+                totalLanes += Integer.parseInt(keys.get("lanes:both_ways"));
+            } else if (dir != 0) {
+                totalLanes += existingBothWays;
+                keys.put("lanes:both_ways", ""+(existingBothWays != 0 ? existingBothWays : ""));
+            }
+        } catch (Exception ignored) {
+            totalLanes = -1;
+        }
+
+        if (!Utils.isOneway(w)) keys.put("lanes", "" + (totalLanes == -1 ? "" : totalLanes));
+
+        cmds.add(new ChangePropertyCommand(Collections.singletonList(w), keys));
+        Command c = new SequenceCommand("Change" + (dir == 1 ? " Forward" : dir == -1 ? " Backward" : "Both Ways")
+                + " Lane Count to " + newCount, cmds);
+        UndoRedoHandler.getInstance().add(c);
+    }
+
+    private static Map<String, String> setLanesInDirection(Way w, int dir, int lanes) {
+        Map<String, String> output = new HashMap<>();
+        output.put(dir == 0 ? "lanes:both_ways" : dir == -1 ? "lanes:backward" : Utils.isOneway(w) ? "lanes" : "lanes:forward", ""+(lanes != 0 ? lanes : ""));
+
+        for (String key : w.getKeys().keySet()) {
+            if (key.contains(":lanes") && !key.contains("note") && !key.contains("proposed")) {
+                int thisDir = 1;
+                if (key.contains(":both_ways")) thisDir = 0;
+                if (key.contains(":backward")) thisDir = -1;
+                if (thisDir != dir) continue;
+
+                int numBars = numBars(w.getKeys().get(key));
+                if (numBars+1 < lanes) {
+                    int diff = lanes - numBars - 1;
+                    output.put(key, w.getKeys().get(key));
+                    for (int i = 0; i < diff; i++) output.put(key, output.get(key) + "|");
+                } else if (numBars+1 > lanes) {
+                    String[] pieces = w.getKeys().get(key).split("\\|");
+                    StringBuilder newStr = new StringBuilder();
+                    for (int i = 0; i < lanes; i++) {
+                        if (i != 0) newStr.append("|");
+                        newStr.append(i < pieces.length ? pieces[i] : "");
                     }
+                    output.put(key, newStr.toString());
                 }
             }
         }

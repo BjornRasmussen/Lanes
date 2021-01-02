@@ -64,6 +64,10 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
             double width;
             if (_way.hasTag("width")) {
                 width = Utils.parseWidth(_way.get("width"));
+            } else if (_way.hasTag("width:start") && start) {
+                width = Utils.parseWidth(_way.get("width:start"));
+            } else if (_way.hasTag("width:end") && !start) {
+                width = Utils.parseWidth(_way.get("width:end"));
             } else if (_way.hasTag("lanes:forward") && _way.hasTag("lanes:backward")) {
                 width = Utils.WIDTH_LANES * (Double.parseDouble(_way.get("lanes:forward")) + Double.parseDouble(_way.get("lanes:backward")));
             } else if (_way.hasTag("lanes")) {

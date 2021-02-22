@@ -37,13 +37,10 @@ public abstract class RoadRenderer {
         _parent = parent;
 
         // Set start/end segments.
-        startPoints = new ArrayList<>();
-        startPoints.add(0.0);
-        endPoints = new ArrayList<>();
-        endPoints.add(w.getLength() + 100);
+        resetRenderingGaps();
     }
 
-    // Renders to road to g, always called by LaneMappingMode.
+    // Renders the road on g, always called by LaneMappingMode.
     abstract void render(Graphics2D g);
     abstract void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter);
 
@@ -57,6 +54,47 @@ public abstract class RoadRenderer {
     // Width in meters, doesn't care about placement.
     abstract double getWidth(boolean start);
 
+    public double sideWidth(boolean start, boolean left) {
+        return getWidth(start)/2;
+    }
+
+    public void addRenderingGap(int from, int to) { addRenderingGap(Utils.nodeIdToDist(getAlignment(), from), Utils.nodeIdToDist(getAlignment(), to)); }
+    public void addRenderingGap(double from, double to) {
+        double min = Math.max(Math.min(from, to), 0);
+        double max = Math.min(Math.max(from, to), getAlignment().getLength());
+        for (int i = 0; i < startPoints.size(); i++) {
+            double start = startPoints.get(i);
+            double end = endPoints.get(i);
+            if (max < end && min > start && max > start && min < end) { // completely inside
+                // Add new end at min, new start at max
+                endPoints.add(i, min);
+                startPoints.add(i+1, max);
+                return; // To avoid problems.
+            } else if (max < end && min <= start && max > start) { // inside start half
+                // Move start to max
+                startPoints.set(i, max);
+                return;
+            } else if (max >= end && min > start && min < end) { // inside end half
+                // Move end to min
+                endPoints.set(i, min);
+            } else if (max >= end && min <= start) { // Outside, containing this range.
+                // Remove this range.
+                endPoints.remove(i);
+                startPoints.remove(i);
+                i--;
+            }
+        }
+        _asphalt = null;
+    }
+
+    public void resetRenderingGaps() {
+        startPoints = new ArrayList<>();
+        startPoints.add(0.0);
+        endPoints = new ArrayList<>();
+        endPoints.add(_way.getLength() + 100);
+        _asphalt = null;
+    }
+
     // For getting alignment split up by road segment.
     public List<Way> getAlignments() {
         // Returns sub parts of alignment.
@@ -64,10 +102,10 @@ public abstract class RoadRenderer {
         for (int i = 0; i < startPoints.size(); i++) {
             double start = Math.max(startPoints.get(i), 0);
             double end = Math.min(endPoints.get(i), getAlignment().getLength());
-
+            if (end-start < 0.01) continue;
             Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
 
-            if (alignmentPart != null) {
+            if (alignmentPart != null && alignmentPart.getLength() > 0.01) {
                 output.add(alignmentPart);
             }
         }
@@ -85,8 +123,9 @@ public abstract class RoadRenderer {
     public static RoadRenderer buildRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
         if (!wayHasRoadTags(w) && !wayHasLaneTags(w)) return null;
         if (w.getNodesCount() == 0 || !w.isVisible()) return null;
+        if (!w.isDrawable()) return null;
 
-        if (w.hasTag("lane_markings", "no")) {
+        if (w.hasTag("lane_markings", "no") || w.hasTag("lanes", "1.5")) {
             return new UnmarkedRoadRenderer(w, mv, parent);
         } else if (wayHasLaneTags(w)) {
             MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, parent);
@@ -103,8 +142,8 @@ public abstract class RoadRenderer {
     // <editor-fold defaultstate=collapsed desc="Methods for Angles and Alignments">
 
     public void updateAlignment() {
-        otherStartAngle = getOtherAngle(true);
-        otherEndAngle = getOtherAngle(false);
+        getOtherAngle(true);
+        getOtherAngle(false);
     }
 
     public double getOtherAngle(boolean start) {
@@ -186,7 +225,6 @@ public abstract class RoadRenderer {
 
     protected void renderAsphalt(Graphics2D g, Color color) {
         g.setColor(color);
-
         for (Polygon p : getAsphaltOutlinePixels()) g.fillPolygon(p);
 
         g.setColor(new Color(0, 0, 0, 0));
@@ -234,15 +272,9 @@ public abstract class RoadRenderer {
 
     public List<Way> getAsphaltOutlineCoords() {
         List<Way> output = new ArrayList<>();
-        for (int i = 0; i < startPoints.size(); i++) {
-            double start = Math.max(startPoints.get(i), 0);
-            double end = Math.min(endPoints.get(i), getAlignment().getLength());
-
-            Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
-            if (alignmentPart == null) {
-                // Most likely invalid bounds
-                return new ArrayList<>();
-            }
+        List<Way> alignments = getAlignments();
+        for (int i = 0; i < alignments.size(); i++) {
+            Way alignmentPart = alignments.get(i);
 
             Way left = getLeftEdge(alignmentPart, i);
             Way right = getRightEdge(alignmentPart, i);
@@ -294,7 +326,7 @@ public abstract class RoadRenderer {
     // </editor-fold>
 
     private static boolean wayHasLaneTags(Way way) {
-        return (!way.hasAreaTags() && way.isDrawable() &&
+        return (!way.hasAreaTags() &&
                 (way.hasTag("lanes") || way.hasTag("lanes:forward") || way.hasTag("lanes:backward") ||
                 way.hasTag("turn:lanes") || way.hasTag("turn:lanes:forward") || way.hasTag("turnlanes:backward") ||
                 way.hasTag("change:lanes") || way.hasTag("change:lanes:forward") || way.hasTag("change:lanes:backward") ||
@@ -308,7 +340,7 @@ public abstract class RoadRenderer {
     }
 
     private static boolean wayHasRoadTags(Way way) {
-        return (!way.hasAreaTags() && way.isDrawable() &&
+        return (!way.hasAreaTags() &&
                 (way.hasTag("highway", "motorway") || way.hasTag("highway", "motorway_link") ||
                         way.hasTag("highway", "trunk") || way.hasTag("highway", "trunk_link") ||
                         way.hasTag("highway", "primary") || way.hasTag("highway", "primary_link") ||

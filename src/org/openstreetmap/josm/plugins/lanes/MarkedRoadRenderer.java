@@ -115,7 +115,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
     private void getLanesFromWay() {
         Map<String, String> tags = _way.getInterestingTags();
 
-        if (_way.isOneway() == -1) {
+        if (_way.isOneway() == -1) { // Supporting this would be suicidal.
             _isValid = false;
         }
 
@@ -138,7 +138,8 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
         if (numLanesBothWays == -1) numLanesBothWays = 0; // Assume no centre lane.
 
-        if (tags.containsKey("lanes") && !Utils.isOneway(_way)) {
+        // Distribute remaining lanes to unspecified directions (lanes=5 & lanes:forward=3 -> assume lanes:backward=2)
+        if (!(numLanesBackward == 0 && numLanesForward == 0 && numLanesBothWays != 0) && tags.containsKey("lanes") && !Utils.isOneway(_way)) {
             int lanes = Integer.parseInt(tags.get("lanes")) - numLanesBothWays;
             if (numLanesForward == -1 && numLanesBackward == -1) {
                 numLanesForward = lanes-lanes/2;
@@ -148,6 +149,11 @@ public class MarkedRoadRenderer extends RoadRenderer {
             } else if (numLanesBackward == -1) {
                 numLanesBackward = lanes - numLanesForward;
             }
+        }
+
+        if (numLanesBothWays == 1 && numLanesBackward == 0 && numLanesForward == 0) {
+            numLanesForward = 1;
+            numLanesBothWays = 0;
         }
 
         _leftRoadEdge = new RoadEdge(Utils.isRightHand(_way) ? -1 : 1, -1, _mv, this);
@@ -177,6 +183,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
                 _backwardDividers.get(i-1).setRightPiece(_backwardLanes.get(i));
             }
         }
+
         if (numLanesBackward != 0) {
             if (numLanesBothWays <= 0) {
                 _bothWaysLane = new Divider(0, 0, _mv, this);
@@ -424,7 +431,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
     }
 
-
     @Override
     public double getWidth(boolean start) {
         double output = -1 * Utils.RENDERING_WIDTH_DIVIDER; // To offset the shoulder width added to each side.
@@ -432,6 +438,14 @@ public class MarkedRoadRenderer extends RoadRenderer {
             output += piece.getWidth(start);
         }
         return output;
+    }
+
+    @Override
+    public double sideWidth(boolean start, boolean left) {
+        double otls = (_offsetToLeftStart+Utils.RENDERING_WIDTH_DIVIDER/2); // otls = offset to left start
+        double otle = (_offsetToLeftEnd+Utils.RENDERING_WIDTH_DIVIDER/2); // otle = offset to left end
+        return start ? (left ? otls : getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER-otls)
+                : (left ? otle : getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER-otle);
     }
 
     public List<RoadPiece> getRoadPieces(boolean renderingOrder) {
@@ -495,16 +509,26 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     @Override
     public Way getLeftEdge(Way alignmentPart, int segment) {
-        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0),
-                _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0), false,
-                (segment==0 || alignmentPart == null) ? otherStartAngle : Double.NaN, (segment==startPoints.size()-1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
+        double offsetStart = _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0);
+        double offsetEnd = _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0);
+        return getEdgeFromOffset(alignmentPart, segment, offsetStart, offsetEnd);
     }
 
     @Override
     public Way getRightEdge(Way alignmentPart, int segment) {
-        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0),
-                _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0), false,
-                (segment==0 || alignmentPart == null) ? otherStartAngle : Double.NaN, (segment==startPoints.size()-1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
+        double offsetStart = _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0);
+        double offsetEnd = _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0);
+        return getEdgeFromOffset(alignmentPart, segment, offsetStart, offsetEnd);
+    }
+
+    private Way getEdgeFromOffset(Way alignmentPart, int segment, double offsetStart, double offsetEnd) {
+        double swt = startPoints.size() == 0 ? 0 : (Math.max(startPoints.get(segment), 0)/getAlignment().getLength());
+        double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
+        double ewt = endPoints.size() == 0 ? getAlignment().getLength() + 100 : (Math.min(endPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
+        double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
+        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, startOffset, endOffset, false,
+                (startPoints.get(segment) < 0.1 || alignmentPart == null) ? otherStartAngle : Double.NaN,
+                (endPoints.get(segment) > getAlignment().getLength()-0.1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
     }
 
     // </editor-fold>

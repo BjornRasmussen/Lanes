@@ -51,15 +51,16 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     Way getLeftEdge(Way waySegment, int segment) {
         return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2),
                 (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                (segment==0 || waySegment == null) ? otherStartAngle : Double.NaN, (segment==startPoints.size()-1 || waySegment == null) ? otherEndAngle : Double.NaN);
+                startPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
+                endPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
     }
 
     @Override
     Way getRightEdge(Way waySegment, int segment) {
         return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2),
                 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                (segment==0 || waySegment == null) ? otherStartAngle : Double.NaN,
-                (segment==startPoints.size()-1 || waySegment == null) ? otherEndAngle : Double.NaN);
+                startPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
+                endPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
     }
 
     private boolean oneway() {
@@ -74,15 +75,15 @@ public class UntaggedRoadRenderer extends RoadRenderer {
                 // This runs for each sub part of a road (each segment)
                 int numDrawn = 0;
                 double distSoFar = 0;
-
-                for (int i = 0; i < getWay().getNodesCount() - 1; i++) {
-                    double distThisTime = getWay().getNode(i).getCoor().greatCircleDistance(getWay().getNode(i + 1).getCoor());
+                Way align = getAlignments().get(h);
+                for (int i = 0; i < align.getNodesCount() - 1; i++) {
+                    double distThisTime = align.getNode(i).getCoor().greatCircleDistance(align.getNode(i + 1).getCoor());
 
                     if (distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + 3*Utils.DIST_BETWEEN_TURNS * (numDrawn)) {
                         double distIntoSegment = Utils.DIST_TO_FIRST_TURN + 3*Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
                         double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
-                        LatLon pos = new LatLon(getWay().getNode(i).lat() * portionFirst + (getWay().getNode(i + 1).lat() * (1 - portionFirst)),
-                                getWay().getNode(i).lon() * portionFirst + (getWay().getNode(i + 1).lon() * (1 - portionFirst)));
+                        LatLon pos = new LatLon(align.getNode(i).lat() * portionFirst + (align.getNode(i + 1).lat() * (1 - portionFirst)),
+                                align.getNode(i).lon() * portionFirst + (align.getNode(i + 1).lon() * (1 - portionFirst)));
                         Point point = _mv.getPoint(pos);
                         double width = (oneway() ? 0.7 : 1.4) * Utils.WIDTH_LANES;
 
@@ -108,4 +109,6 @@ public class UntaggedRoadRenderer extends RoadRenderer {
 
     @Override
     public double getWidth(boolean start) { return Utils.WIDTH_LANES*(Utils.isOneway(_way) ? 1 : 2) + Utils.RENDERING_WIDTH_DIVIDER; }
+
+
 }

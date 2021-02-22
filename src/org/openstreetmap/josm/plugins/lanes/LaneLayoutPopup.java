@@ -20,8 +20,11 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
     private JScrollPane presetPanel;
     private JTabbedPane layoutPanel;
     private RoadRenderer _rr;
+    private LaneMappingMode _parent;
     private boolean undo = false;
     private int changeTolerance = 0;
+
+    private JPanel temp;
 
     /**
      * A pop-up that allows for quick editing of the layout of a road.
@@ -30,6 +33,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
     public LaneLayoutPopup(RoadRenderer rr) {
         super();
         _rr = rr;
+        _parent = _rr._parent;
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(600, 400));
 
@@ -39,7 +43,32 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
         add(layoutPanel, BorderLayout.CENTER);
 
         // Add this as a listener for dataset changes
-        _rr._parent.addUpdateListener(this);
+        _parent.addUpdateListener(this);
+    }
+
+    private void setGapAdderPanel() {
+        temp = new JPanel();
+        temp.setLayout(new BorderLayout());
+        JTextField start = new JTextField();
+        JTextField end = new JTextField();
+        JButton submit = new JButton();
+        submit.setText("SUBMIT");
+        submit.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (start.getText().length() > 0 && end.getText().length() > 0) {
+                    try {
+                        double startDist = Double.parseDouble(start.getText());
+                        double endDist = Double.parseDouble(end.getText());
+                        _rr.addRenderingGap(startDist, endDist);
+                        _rr._asphalt = _rr.getAsphaltOutlineCoords();
+                    } catch (Exception ignored) { /* invalid inputs in start/end*/ }
+                }
+            }
+        });
+        temp.add(start, BorderLayout.LINE_START);
+        temp.add(end, BorderLayout.CENTER);
+        temp.add(submit, BorderLayout.LINE_END);
     }
 
     /**
@@ -78,14 +107,17 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
         JPanel output =  new PresetButton(preset.getPresetImage());
         output.addMouseListener(new MouseListener() {
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mousePressed(MouseEvent e) {
                 changeTolerance++;
+                _parent.forceUpdateIgnore(1);
                 Utils.applyPreset(preset, w, undo);
+                _parent.updateOneRoad(w.getUniqueId());
+                dataChange();
                 undo = true;
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {}
+            public void mouseClicked(MouseEvent e) {}
             @Override
             public void mouseReleased(MouseEvent e) {}
             @Override
@@ -104,6 +136,12 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
         // Need outer to be choose marked/unmarked
         // Unmarked is just simple width options.
         // Marked has checkbox for centre lane
+
+        if (_rr == null) {
+            _parent.removeUpdateListener(this);
+            return;
+        } // Don't let deleted ways cause problems before the popup closes.
+
         layoutPanel = new JTabbedPane();
         layoutPanel.addTab("Marked", getMarkedLayoutPanel());
         layoutPanel.addTab("Unmarked", getUnmarkedLayoutPanel());
@@ -123,7 +161,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
             output.add(getBothWaysCheckbox(), BorderLayout.AFTER_LAST_LINE);
         }
         // Add marked version of dynamic layout thingy
-        output.add(new RoadPanel(_rr), BorderLayout.CENTER);
+        output.add(new RoadPanel(_rr, this), BorderLayout.CENTER);
         return output;
     }
 
@@ -134,7 +172,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
      */
     private JComponent getUnmarkedLayoutPanel() {
 //        JPanel output = new JPanel();
-        return new RoadPanel(_rr);
+        return new RoadPanel(_rr, this);
     }
 
     /**
@@ -149,9 +187,9 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
      * When the data changes, update the layout panel
      * and ensure future edits with the popup don't undo the most recent edit.
      */
-    private void dataChange() {
+    void dataChange() {
         remove(layoutPanel);
-        _rr = _rr._parent.wayIdToRSR.get(_rr.getWay().getUniqueId());
+        _rr = _parent.wayIdToRSR.get(_rr.getWay().getUniqueId());
         setLayoutPanel();
         add(layoutPanel, BorderLayout.CENTER);
         validate();
@@ -169,7 +207,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        dataChange();
+        if (_rr != null) dataChange();
     }
 }
 
@@ -180,10 +218,12 @@ class RoadPanel extends JPanel {
     private final RoadRenderer _rr;
     private double _bearing;
     private ClickAreaManager _manager;
+    private LaneLayoutPopup _p;
 
-    public RoadPanel(RoadRenderer rr) {
+    public RoadPanel(RoadRenderer rr, LaneLayoutPopup p) {
         super();
         _rr = rr;
+        _p = p;
         _bearing = Utils.getWayBearing(_rr.getAlignment());
         _manager = new ClickAreaManager();
         addMouseListener(new MouseListener() {
@@ -224,24 +264,30 @@ class RoadPanel extends JPanel {
         if (_rr instanceof MarkedRoadRenderer) {
             boolean rh = Utils.isRightHand(_rr.getWay());
             if (Utils.isOneway(_rr.getWay())) {
-                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size());
+                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size(), _p);
             } else {
-                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size());
-                drawLaneChange((Graphics2D) g, rh ? left : right, width, height, -1, ((MarkedRoadRenderer) _rr)._backwardLanes.size());
+                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size(), _p);
+                drawLaneChange((Graphics2D) g, rh ? left : right, width, height, -1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(), _p);
             }
         }
     }
 
     private double roadWidth() { return (Math.min(getWidth(), getHeight())) * roadsPerWidth; }
+
     private double distOut() { return (Math.max(getWidth(), getHeight())) * 0.71; /* 0.71 > sqrt(2)/2 */ }
-    private void drawLaneChange(Graphics2D g, Point topLeft, int width, int height, int dir, int number) {
+
+    private void drawLaneChange(Graphics2D g, Point topLeft, int width, int height, int dir, int number, LaneLayoutPopup forDataChanges) {
         boolean isDarkMode = getBackground().getRed() <= 127; // Assumes grayish background.
         Color brighter = getBackground().brighter();
         Color darker = new Color((getBackground().getRed()+getBackground().darker().getRed())/2,
                 (getBackground().getGreen()+getBackground().darker().getGreen())/2,
                 (getBackground().getBlue()+getBackground().darker().getBlue())/2);
+
+
         g.setColor(isDarkMode ? brighter : darker);
         g.fillRoundRect(topLeft.x-width/2, topLeft.y-height/2, width, height, 10, 10);
+
+
         int fontSize = 25;
         int plusMinus = 20;
 
@@ -250,29 +296,40 @@ class RoadPanel extends JPanel {
         g.setFont(new Font("Arial", Font.BOLD, fontSize));
         g.drawString(number+"", topLeft.x-17, topLeft.y + 9);
 
+
         g.setFont(new Font("Arial", Font.BOLD, plusMinus));
+
         g.drawString("+", topLeft.x+width-48, topLeft.y-2);
         g.drawString("−", topLeft.x+width-48, topLeft.y+16);
+
         Polygon plus = new Polygon(new int[] {topLeft.x+width-100, topLeft.x+width+10, topLeft.x+width+10, topLeft.x+width-100, topLeft.x+width-100},
                 new int[] {topLeft.y, topLeft.y, topLeft.y-60, topLeft.y-60, topLeft.y}, 4);
         Polygon minus = new Polygon(new int[] {topLeft.x+width-100, topLeft.x+width+10, topLeft.x+width+10, topLeft.x+width-100, topLeft.x+width-100},
                 new int[] {topLeft.y, topLeft.y, topLeft.y+60, topLeft.y+60, topLeft.y}, 4);
+
         ActionListener increase = e -> {
             int bothWays = 0;
             try {
-                Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
+                bothWays = Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
             } catch (Exception ignored) {}
+            _rr._parent.forceUpdateIgnore(1);
             Utils.changeLaneCount(_rr.getWay(), dir, number+1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(),
                     ((MarkedRoadRenderer) _rr)._forwardLanes.size(), bothWays);
+            _rr._parent.updateOneRoad(_rr.getWay().getUniqueId());
+            forDataChanges.dataChange();
         };
         ActionListener decrease = e -> {
             int bothWays = 0;
             try {
-                Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
+                bothWays = Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
             } catch (Exception ignored) {}
+            _rr._parent.forceUpdateIgnore(1);
             Utils.changeLaneCount(_rr.getWay(), dir, number-1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(),
                     ((MarkedRoadRenderer) _rr)._forwardLanes.size(), bothWays);
+            _rr._parent.updateOneRoad(_rr.getWay().getUniqueId());
+            forDataChanges.dataChange();
         };
+
         _manager.addBox(increase, plus);
         _manager.addBox(decrease, minus);
     }

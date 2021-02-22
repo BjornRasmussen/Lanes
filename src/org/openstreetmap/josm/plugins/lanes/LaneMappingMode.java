@@ -8,9 +8,13 @@ import java.util.*;
 import java.util.List;
 
 import org.openstreetmap.josm.actions.mapmode.MapMode;
+import org.openstreetmap.josm.command.AddCommand;
+import org.openstreetmap.josm.command.Command;
+import org.openstreetmap.josm.command.SequenceCommand;
 import org.openstreetmap.josm.data.Bounds;
 import org.openstreetmap.josm.data.ProjectionBounds;
 import org.openstreetmap.josm.data.UndoRedoHandler;
+import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.*;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapFrame;
@@ -20,6 +24,7 @@ import org.openstreetmap.josm.gui.layer.MapViewPaintable;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 import org.openstreetmap.josm.tools.Shortcut;
 
+import javax.swing.*;
 import javax.swing.event.ChangeListener;
 
 /*
@@ -36,10 +41,14 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         MapViewPaintable, UndoRedoHandler.CommandQueuePreciseListener {
 
     private List<RoadRenderer> roads = null;
+    private List<IntersectionRenderer> intersections = null;
     private MapView _mv;
+    private List<Way> _ways = new ArrayList<>();
     private List<ChangeListener> _closePopups = new ArrayList<>(); // For closing pop-ups when Lane editing mode is left.
     private List<ActionListener> _updatePopups = new ArrayList<>(); // For updating the lane diagram on the popups.
     public Map<Long, RoadRenderer> wayIdToRSR = new HashMap<>();
+    public Map<Long, IntersectionRenderer> nodeIdToISR = new HashMap<>();
+    private int mapChangeTolerance = 0; // Other objects can increase this by X to make it ignore the next X times the dataset changes.
 
     public LaneMappingMode() {
         super(tr("Lane Editing"), "laneconnectivity.png", tr("Activate lane editing mode"),
@@ -56,7 +65,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      */
     @Override
     public void paint(Graphics2D g, MapView mv, Bounds bbox) {
-        if (mv.getScale() > 16) return; // Don't render when the map is too zoomed out
+        if (mv == null || mv.getScale() > 16) return; // Don't render when the map is too zoomed out
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         double cushion = 200;
@@ -72,6 +81,12 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
                 bounds.maxEast + cushion,
                 bounds.maxNorth + cushion);
 
+        // Render intersections
+        for (IntersectionRenderer i : intersections) {
+            if (intersectionShouldBeRendered(bounds, i)) {
+                i.render(g);
+            }
+        }
 
         // Render each road
         for (RoadRenderer r : roads) {
@@ -79,11 +94,6 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
                 r.render(g);
             }
         }
-
-        // Render intersections
-//        for (IntersectionRenderer i : intersections) {
-//            if (intersectionShouldBeRendered(bounds, i)) i.render(g);
-//        }
     }
 
     @Override
@@ -127,6 +137,14 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      */
     public void addUpdateListener(ActionListener a) {
         _updatePopups.add(a);
+    }
+
+    /**
+     * Popups can remove listeners here so they no longer update just after the dataset is updated.
+     * @param a The listener to be removed.
+     */
+    public void removeUpdateListener(ActionListener a) {
+        _updatePopups.remove(a);
     }
 
     // <editor-fold defaultstate="collapsed" desc="Boring Methods">
@@ -175,9 +193,9 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      * Builds the RoadRenderers / IntersectionRenderers if they are currently null.
      */
     private void ensureRoadSegmentsNotNull() {
-        if (roads == null/* || intersections == null*/) {
+        if (roads == null || intersections == null) {
             roads = getAllRoadRenderers(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
-//            intersections = getAllIntersections(_mv);
+            intersections = getAllIntersections(_mv);
         }
     }
 
@@ -188,6 +206,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      * @return The list of created RoadRenderers.
      */
     private List<RoadRenderer> getAllRoadRenderers(List<Way> ways, MapView mv) {
+        _ways = ways;
         wayIdToRSR = new HashMap<>();
         List<RoadRenderer> output = new ArrayList<>();
         for (Way w : ways) {
@@ -210,23 +229,74 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      * @return The created list of IntersectionRenderers.
      */
     private List<IntersectionRenderer> getAllIntersections(MapView mv) {
-        List<IntersectionRenderer> intersections = new ArrayList<>();
-        Set<Long> nodeIds = new HashSet<>();
+
+        // Get all node-only intersections.
+        nodeIdToISR = new HashMap<>();
+        List<NodeIntersectionRenderer> intersections = new ArrayList<>();
         if (roads == null) throw new RuntimeException("RoadRenderers not initiated before calling getAllIntersections().");
         for (RoadRenderer r : roads) {
             for (Node n : r.getWay().getNodes()) {
-                if (!nodeIds.contains(n.getUniqueId()) && Utils.nodeShouldBeIntersection(n, this)) {
-                    intersections.add(new IntersectionRenderer(n, mv, this));
-                    nodeIds.add(n.getUniqueId());
+                if (!nodeIdToISR.containsKey(n.getUniqueId()) && Utils.nodeShouldBeIntersection(n, this)) {
+                    NodeIntersectionRenderer newest = new NodeIntersectionRenderer(n, mv, this);
+                    intersections.add(newest);
+                    nodeIdToISR.put(n.getUniqueId(), newest);
                 }
             }
         }
-        return intersections;
+
+        intersections.sort(Comparator.comparingDouble(o -> o.getPos().lat()));
+
+        // Merge overlapping node-only intersections.
+        int[] groups = new int[intersections.size()];
+        int max = 0;
+        for (int i = 1; i < intersections.size(); i++) {
+            int thisGroup = -1;
+            // Go back along i until an intersect is found:
+            // Max diff in lat is 0.001.
+            for (int j = i-1; j >= 0; j--) {
+                if (Math.abs(intersections.get(j).getPos().lat()-intersections.get(i).getPos().lat()) > 0.0005) break; // Don't try to connect two intersections that are more than ~150 ft apart.
+                if (sameIntersection(intersections.get(j), intersections.get(i))) { thisGroup = groups[j]; break; }
+            }
+            if (thisGroup == -1) {
+                max++;
+                groups[i] = max;
+            } else {
+                groups[i] = thisGroup;
+            }
+        }
+        List<NodeIntersectionRenderer>[] multiNodeCollections = new List[max+1];
+        for (int i = 0; i < intersections.size(); i++) {
+            if (multiNodeCollections[groups[i]] == null) multiNodeCollections[groups[i]] = new ArrayList<>();
+            multiNodeCollections[groups[i]].add(intersections.get(i));
+        }
+
+        List<IntersectionRenderer> out = new ArrayList<>();
+        for (List<NodeIntersectionRenderer> group : multiNodeCollections) {
+            if (group != null) {
+                new MultiIntersectionRenderer(group, out);
+            }
+        }
+
+        nodeIdToISR = new HashMap<>();
+
+        for (IntersectionRenderer m : out) for (long l : ((MultiIntersectionRenderer) m).getNodeIntersections()) nodeIdToISR.put(l, m);
+
+        return out;
+    }
+
+    private boolean sameIntersection(NodeIntersectionRenderer a, NodeIntersectionRenderer b) {
+        if (a.getPos().greatCircleDistance(b.getPos()) > 100) return false;
+        if (Utils.intersect(a._lowResOutline, b._lowResOutline, new double[2], false, 0, false, false) == null) return false;
+        return true;
     }
 
     // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Handling Dataset Changes">
+
+    public void forceUpdateIgnore(int num) {
+        mapChangeTolerance += num;
+    }
 
     @Override
     public void commandAdded(UndoRedoHandler.CommandAddedEvent e) {
@@ -250,12 +320,69 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
     /**
      * Forces the dataset to be updated next time paint() is called.
+     * If the forceUpdateIgnore count is more than 0, this will take
+     * one away from the count instead of updating the dataset.
      */
     private void updateDataset() {
+        // Don't update dataset when the lower level objects have requested to do it themselves
+        mapChangeTolerance--;
+        if (mapChangeTolerance >= 0) return;
+        mapChangeTolerance = 0;
+
         roads = null;
-//        intersections = null;
+        intersections = null;
         ensureRoadSegmentsNotNull();
-        for (ActionListener a : _updatePopups) a.actionPerformed(null);
+        Object[] updatePopups = _updatePopups.toArray();
+        for (Object a : updatePopups) ((ActionListener) a).actionPerformed(null);
+    }
+
+    /**
+     * Updates this way and the nearby intersections.
+     * Only to be used on ways who's alignments or tags were changed.
+     * If the way got deleted, this will not work.
+     * @param uniqueID The unique id of the Way
+     */
+    public void updateOneRoad(long uniqueID) {
+        Way w = null;
+        for (Way way : _ways) if (way.getUniqueId() == uniqueID) w = way;
+        if (w == null || !wayIdToRSR.containsKey(uniqueID)) { // Way deleted/never existed, use slow method instead.
+            mapChangeTolerance = 0;
+            updateDataset();
+            return;
+        }
+
+        // Replace the single roadRenderer:
+        RoadRenderer replacementRR = RoadRenderer.buildRoadRenderer(w, _mv, this);
+        if (replacementRR != null) {
+            roads.remove(wayIdToRSR.get(uniqueID));
+            wayIdToRSR.put(uniqueID, replacementRR);
+            roads.add(replacementRR);
+            replacementRR.updateAlignment();
+        }
+
+        // Find all nearby intersections and prepare to update them.
+        List<IntersectionRenderer> intersectionsToUpdate = new ArrayList<>();
+        List<RoadRenderer> roadsToUpdate = new ArrayList<>();
+        for (Node n : w.getNodes()) {
+            if (nodeIdToISR.containsKey(n.getUniqueId())) {
+                for (Way w2 : n.getParentWays()) {
+                    if (wayIdToRSR.containsKey(w2.getUniqueId())) {
+                        roadsToUpdate.add(wayIdToRSR.get(w2.getUniqueId()));
+                        for (Node n2 : w2.getNodes()) {
+                            if (nodeIdToISR.containsKey(n2.getUniqueId())) {
+                                intersectionsToUpdate.add(nodeIdToISR.get(n2.getUniqueId()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // For all roads that were part of one of those intersections, reset all hidden sections.
+        for (RoadRenderer r : roadsToUpdate) r.resetRenderingGaps();
+
+        // For all intersections near on the those roads, update their alignments.
+        for (IntersectionRenderer i : intersectionsToUpdate) i.updateAlignment();
     }
 
     // </editor-fold>

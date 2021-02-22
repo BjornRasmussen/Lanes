@@ -71,7 +71,7 @@ public class Divider extends RoadPiece {
                 output = Utils.parseWidth(value);
             }
         } catch (Exception ignored) {}
-
+        if (Double.isNaN(output)) output = 0;
         return output + Utils.RENDERING_WIDTH_DIVIDER;
     }
 

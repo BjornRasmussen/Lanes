@@ -6,6 +6,10 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.openstreetmap.josm.actions.mapmode.MapMode;
 import org.openstreetmap.josm.command.AddCommand;
@@ -84,14 +88,18 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
         // Render intersections
         for (IntersectionRenderer i : intersections) {
             if (intersectionShouldBeRendered(bounds, i)) {
-                i.render(g);
+                try {
+                    i.render(g);
+                } catch (Exception ignored) {}
             }
         }
 
         // Render each road
         for (RoadRenderer r : roads) {
             if (wayShouldBeRendered(bounds, r.getWay())) {
-                r.render(g);
+                try {
+                    r.render(g);
+                } catch (Exception ignored) {}
             }
         }
     }
@@ -207,18 +215,39 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
      */
     private List<RoadRenderer> getAllRoadRenderers(List<Way> ways, MapView mv) {
         _ways = ways;
-        wayIdToRSR = new HashMap<>();
-        List<RoadRenderer> output = new ArrayList<>();
+        wayIdToRSR = new Hashtable<>();
+        List<RoadRenderer> output = new Vector<>();
+
+        // Generate each RoadRenderer.
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
         for (Way w : ways) {
-            RoadRenderer rr = RoadRenderer.buildRoadRenderer(w, mv, this);
-            if (rr == null) continue;
-            wayIdToRSR.put(w.getUniqueId(), rr);
-            output.add(rr);
+            Runnable r = () -> {
+                try {
+                    RoadRenderer rr = RoadRenderer.buildRoadRenderer(w, mv, this);
+                    if (rr == null) return;
+                    wayIdToRSR.put(w.getUniqueId(), rr);
+                    output.add(rr);
+                } catch (Exception ignored) {}
+            };
+            executor.execute(r);
+        }
+        executor.shutdown();
+        try { executor.awaitTermination(30, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+
+        // Give each RoadRenderer a chance to look at roads at endpoints and adjust endpoint angles.
+        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
+        for (RoadRenderer rr : output) {
+            Runnable r = () -> {
+                try {
+                    rr.updateAlignment(); // updates alignment based on nearby ways.
+                } catch (Exception ignored) {}
+            };
+            executor.execute(r);
         }
 
-        for (RoadRenderer rr : output) {
-            rr.updateAlignment(); // updates alignment based on nearby ways.
-        }
+        executor.shutdown();
+        try { executor.awaitTermination(30, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+
 
         return output;
     }
@@ -231,51 +260,91 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     private List<IntersectionRenderer> getAllIntersections(MapView mv) {
 
         // Get all node-only intersections.
-        nodeIdToISR = new HashMap<>();
-        List<NodeIntersectionRenderer> intersections = new ArrayList<>();
-        if (roads == null) throw new RuntimeException("RoadRenderers not initiated before calling getAllIntersections().");
+        nodeIdToISR = new Hashtable<>();
+        Set<Long> handled = new HashSet();
+        List<NodeIntersectionRenderer> intersections = new Vector<>();
+        if (roads == null) throw new RuntimeException("RoadRenderers not initialized before calling getAllIntersections().");
+
+
+        // Get node-only intersections.
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
         for (RoadRenderer r : roads) {
             for (Node n : r.getWay().getNodes()) {
-                if (!nodeIdToISR.containsKey(n.getUniqueId()) && Utils.nodeShouldBeIntersection(n, this)) {
-                    NodeIntersectionRenderer newest = new NodeIntersectionRenderer(n, mv, this);
-                    intersections.add(newest);
-                    nodeIdToISR.put(n.getUniqueId(), newest);
+                if (!handled.contains(n.getUniqueId())) {
+                    handled.add(n.getUniqueId());
+                    executor.execute(() -> {
+                        if (!Utils.nodeShouldBeIntersection(n, this)) return;
+//                        try {
+                            NodeIntersectionRenderer newest = new NodeIntersectionRenderer(n, mv, this);
+                            intersections.add(newest);
+                            nodeIdToISR.put(n.getUniqueId(), newest);
+//                        } catch (Exception ignored) {}
+                    });
                 }
             }
         }
 
+        executor.shutdown();
+        try { executor.awaitTermination(60, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+
         intersections.sort(Comparator.comparingDouble(o -> o.getPos().lat()));
+
 
         // Merge overlapping node-only intersections.
         int[] groups = new int[intersections.size()];
         int max = 0;
+        int[] thisGroup = new int[10]; // Max num of existing separate intersections this node intersection can be merged with. Max real world is usually like 3.
         for (int i = 1; i < intersections.size(); i++) {
-            int thisGroup = -1;
+            int num = 0;
             // Go back along i until an intersect is found:
             // Max diff in lat is 0.001.
             for (int j = i-1; j >= 0; j--) {
                 if (Math.abs(intersections.get(j).getPos().lat()-intersections.get(i).getPos().lat()) > 0.0005) break; // Don't try to connect two intersections that are more than ~150 ft apart.
-                if (sameIntersection(intersections.get(j), intersections.get(i))) { thisGroup = groups[j]; break; }
+                if (sameIntersection(intersections.get(j), intersections.get(i))) {
+                    thisGroup[num] = groups[j];
+                    num++;
+                }
             }
-            if (thisGroup == -1) {
+            if (num == 0) {
                 max++;
                 groups[i] = max;
             } else {
-                groups[i] = thisGroup;
+                groups[i] = thisGroup[0];
+
+                // Now, check to see if two groups need to be merged.
+                if (num > 1) {
+                    for (int j = 0; j < i; j++) {
+                        for (int k = 1; k < num; k++) {
+                            if (groups[j] == thisGroup[k]) {
+                                groups[j] = thisGroup[0];
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
+
         List<NodeIntersectionRenderer>[] multiNodeCollections = new List[max+1];
         for (int i = 0; i < intersections.size(); i++) {
             if (multiNodeCollections[groups[i]] == null) multiNodeCollections[groups[i]] = new ArrayList<>();
             multiNodeCollections[groups[i]].add(intersections.get(i));
         }
 
-        List<IntersectionRenderer> out = new ArrayList<>();
+        List<IntersectionRenderer> out = new Vector<>();
+        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
         for (List<NodeIntersectionRenderer> group : multiNodeCollections) {
             if (group != null) {
-                new MultiIntersectionRenderer(group, out);
+                executor.execute(() -> {
+                    try {
+                        new MultiIntersectionRenderer(group, out);
+                    } catch (Exception ignored) {}
+                });
             }
         }
+
+        executor.shutdown();
+        try { executor.awaitTermination(30, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
 
         nodeIdToISR = new HashMap<>();
 
@@ -286,6 +355,7 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
 
     private boolean sameIntersection(NodeIntersectionRenderer a, NodeIntersectionRenderer b) {
         if (a.getPos().greatCircleDistance(b.getPos()) > 100) return false;
+        if (a.getPos().greatCircleDistance(b.getPos()) < 15) return true;
         if (Utils.intersect(a._lowResOutline, b._lowResOutline, new double[2], false, 0, false, false) == null) return false;
         return true;
     }
@@ -441,4 +511,6 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
     }
 
     // </editor-fold>
+
+
 }

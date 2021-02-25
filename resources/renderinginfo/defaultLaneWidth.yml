@@ -1,9 +1,11 @@
 default: 3.5
 CA: 3.5
 DA: 3.3
-FR: 3.5
+FR: 3.0
 NO: 3.3
 SE: 3.4
 UK: 3.0
 US: 3.5
 JA: 3.3
+ES: 3.0
+NL: 3.0

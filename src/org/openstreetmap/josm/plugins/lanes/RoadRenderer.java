@@ -58,8 +58,8 @@ public abstract class RoadRenderer {
         return getWidth(start)/2;
     }
 
-    public void addRenderingGap(int from, int to) { addRenderingGap(Utils.nodeIdToDist(getAlignment(), from), Utils.nodeIdToDist(getAlignment(), to)); }
-    public void addRenderingGap(double from, double to) {
+    public synchronized void addRenderingGap(int from, int to) { addRenderingGap(Utils.nodeIdToDist(getAlignment(), from), Utils.nodeIdToDist(getAlignment(), to)); }
+    public synchronized void addRenderingGap(double from, double to) {
         double min = Math.max(Math.min(from, to), 0);
         double max = Math.min(Math.max(from, to), getAlignment().getLength());
         for (int i = 0; i < startPoints.size(); i++) {

@@ -24,6 +24,10 @@ public class MultiIntersectionRenderer extends IntersectionRenderer {
 
     public MultiIntersectionRenderer(List<NodeIntersectionRenderer> nodeOnlyIntersections, List<IntersectionRenderer> addToThis) {
         super(nodeOnlyIntersections.get(0)._mv, nodeOnlyIntersections.get(0)._m);
+        // Fixme remove
+        _ordering = new ArrayList<>();
+        _vertextOrdering = new ArrayList<>();
+
         _internalGraph = new ArrayList<>();
         _wayVectors = new ArrayList<>();
         _space = new ArrayList<>();
@@ -35,6 +39,8 @@ public class MultiIntersectionRenderer extends IntersectionRenderer {
         if (nodeOnlyIntersections.size() != 0) new MultiIntersectionRenderer(nodeOnlyIntersections, addToThis);
         _trimWays = true;
         createIntersectionLayout();
+
+        if (!_isValid) return;
 
         // Get average of wayVector froms.
         double totalLat = 0;
@@ -57,6 +63,7 @@ public class MultiIntersectionRenderer extends IntersectionRenderer {
         // Explores all wayVectors leading out of a single-node.
         // Recursive, used to find internal road network.
         exploredNodes.add(currentNode.getNode().getUniqueId());
+        _vertextOrdering.add(currentNode.getNode()); // TODO remove
         space.remove(currentNode);
         List<WayVector> ways = Utils.getWaysFromNode(currentNode.getNode(), _m, bearing);
         for (WayVector w : ways) {
@@ -124,6 +131,7 @@ public class MultiIntersectionRenderer extends IntersectionRenderer {
                 explore(endNodeRen, exploredNodes, space, exploredWays, wayVectors, thisBearing);
             } else if (!nodeExplored) {
                 wayVectors.add(w);
+                _ordering.add(w.getParent().getNode(w.getTo()));
             }
             if (isPart) {
                 _toBeTrimmed.addAll(routeSoFar);

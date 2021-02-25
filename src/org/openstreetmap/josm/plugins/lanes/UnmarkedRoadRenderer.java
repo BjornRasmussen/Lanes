@@ -58,7 +58,7 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
 
     @Override
     public double getWidth(boolean start) {
-        double defaultWidth = 2 * Utils.WIDTH_LANES + Utils.RENDERING_WIDTH_DIVIDER;
+        double defaultWidth = (Utils.isOneway(getWay()) ? 1 : 2) * Utils.WIDTH_LANES;
         try {
             double width;
             if (_way.hasTag("width")) {
@@ -76,7 +76,7 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
             }
             return width + Utils.RENDERING_WIDTH_DIVIDER;
         } catch (Exception e) {
-            return defaultWidth;
+            return defaultWidth + Utils.RENDERING_WIDTH_DIVIDER;
         }
     }
 }

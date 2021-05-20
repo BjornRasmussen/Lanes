@@ -24,7 +24,8 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
     private boolean undo = false;
     private int changeTolerance = 0;
 
-    private JPanel temp;
+    // Store current state:
+    private String selectedSubPart;
 
     /**
      * A pop-up that allows for quick editing of the layout of a road.
@@ -44,31 +45,6 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
 
         // Add this as a listener for dataset changes
         _parent.addUpdateListener(this);
-    }
-
-    private void setGapAdderPanel() {
-        temp = new JPanel();
-        temp.setLayout(new BorderLayout());
-        JTextField start = new JTextField();
-        JTextField end = new JTextField();
-        JButton submit = new JButton();
-        submit.setText("SUBMIT");
-        submit.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (start.getText().length() > 0 && end.getText().length() > 0) {
-                    try {
-                        double startDist = Double.parseDouble(start.getText());
-                        double endDist = Double.parseDouble(end.getText());
-                        _rr.addRenderingGap(startDist, endDist);
-                        _rr._asphalt = _rr.getAsphaltOutlineCoords();
-                    } catch (Exception ignored) { /* invalid inputs in start/end*/ }
-                }
-            }
-        });
-        temp.add(start, BorderLayout.LINE_START);
-        temp.add(end, BorderLayout.CENTER);
-        temp.add(submit, BorderLayout.LINE_END);
     }
 
     /**
@@ -155,11 +131,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
     private JComponent getMarkedLayoutPanel() {
         JPanel output = new JPanel();
         output.setLayout(new BorderLayout());
-        // Add checkbox for center lane at bottom if in USA or Canada (from list)
-        // TODO use yml file instead of this easy solution
-        if (Territories.isIso3166Code("US", _rr.getWay().getNode(0).getCoor()) || Territories.isIso3166Code("CA", _rr.getWay().getNode(0).getCoor())) {
-            output.add(getBothWaysCheckbox(), BorderLayout.AFTER_LAST_LINE);
-        }
+
         // Add marked version of dynamic layout thingy
         output.add(new RoadPanel(_rr, this), BorderLayout.CENTER);
         return output;
@@ -176,14 +148,6 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
     }
 
     /**
-     * Genreates the checkbox for specifying whether there is a both_ways lane in the center.
-     * @return The JComponent containing the checkbox and text.
-     */
-    private JComponent getBothWaysCheckbox() {
-        return new JLabel("[ ] Centre left turn lane");
-    }
-
-    /**
      * When the data changes, update the layout panel
      * and ensure future edits with the popup don't undo the most recent edit.
      */
@@ -194,12 +158,13 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
         add(layoutPanel, BorderLayout.CENTER);
         validate();
         repaint();
+
         // Ensure that edits not done by this plugin don't get undone.
         // Applying a preset deletes some data, so usually, the previous
         // preset edit is undone when a preset is applied, keeping data that would be gone.
-        // This stuff ensures that tag changes done when the popup is open don't get undone.
+        // This stuff ensures that tag changes done when the popup is open don't get undone after it gets closed.
         changeTolerance--;
-        if (changeTolerance<0) {
+        if (changeTolerance < 0) {
             undo = false;
             changeTolerance = 0;
         }
@@ -276,7 +241,7 @@ class RoadPanel extends JPanel {
 
     private double distOut() { return (Math.max(getWidth(), getHeight())) * 0.71; /* 0.71 > sqrt(2)/2 */ }
 
-    private void drawLaneChange(Graphics2D g, Point topLeft, int width, int height, int dir, int number, LaneLayoutPopup forDataChanges) {
+    private void drawLaneChange(Graphics2D g, Point topLeft, int width, int height, int dir, int number, LaneLayoutPopup forDataChanges)  {
         boolean isDarkMode = getBackground().getRed() <= 127; // Assumes grayish background.
         Color brighter = getBackground().brighter();
         Color darker = new Color((getBackground().getRed()+getBackground().darker().getRed())/2,
@@ -351,6 +316,7 @@ class PresetButton extends JPanel {
 }
 
 // This class is for the floating lane count changer.
+// THIS IS NOT CURRENTLY USED, SINCE IT WAS EASIER TO JUST SET THE BUTTON AS AN IMAGE AND RECORD WHERE CLICKS HAPPENED
 class LaneCountChanger extends JPanel {
     private Way _way;
     private int _lanes;

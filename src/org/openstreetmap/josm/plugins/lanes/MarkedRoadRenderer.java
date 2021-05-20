@@ -1,20 +1,16 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import jdk.jfr.Percentage;
 import org.openstreetmap.josm.command.ChangeCommand;
 import org.openstreetmap.josm.command.Command;
 import org.openstreetmap.josm.command.SequenceCommand;
 import org.openstreetmap.josm.data.UndoRedoHandler;
-import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MainApplication;
-import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.List;
@@ -92,7 +88,9 @@ public class MarkedRoadRenderer extends RoadRenderer {
         renderAsphaltPopup(g, Utils.POPUP_ASPHALT_COLOR, center, bearing, distOut, pixelsPerMeter);
 
         for (RoadPiece p : getRoadPieces(true)) {
-            p.renderPopup(g, center, bearing, distOut, pixelsPerMeter);
+            try {
+                p.renderPopup(g, center, bearing, distOut, pixelsPerMeter);
+            } catch (Exception ignored) {}
         }
     }
 
@@ -204,13 +202,87 @@ public class MarkedRoadRenderer extends RoadRenderer {
                 _bothWaysLane.setLeftPiece(_forwardLanes.get(_forwardLanes.size() - 1));
             }
         }
+
+        // If road has a width tag, distribute that width among all lanes that don't have their width explicitly set.
+        String widthTag = _way.get("width");
+        String widthTagStart = _way.get("width:start");
+        String widthTagEnd = _way.get("width:end");
+
+        double width = Utils.parseWidth(widthTag);
+        double widthStart = Utils.parseWidth(widthTagStart);
+        double widthEnd = Utils.parseWidth(widthTagEnd);
+        if (widthTagStart == null || widthTagStart.equals("")) { widthStart = width; widthTagStart = widthTag; }
+        if (widthTagEnd == null || widthTagEnd.equals("")) { widthEnd = width; widthTagEnd = widthTag; }
+        if (widthTag != null || widthTagStart != null || widthTagEnd != null) {
+            List<RoadPiece> pieces = new ArrayList<>();
+            List<Lane> lanes = new ArrayList<>();
+            for (RoadPiece r : _forwardLanes) {
+                lanes.add((Lane) r);
+                pieces.add(r);
+            }
+            for (RoadPiece r : _forwardDividers) {
+                pieces.add(r);
+            }
+            for (RoadPiece r : _backwardLanes) {
+                lanes.add((Lane) r);
+                pieces.add(r);
+            }
+            for (RoadPiece r : _backwardDividers) {
+                pieces.add(r);
+            }
+
+            if (_bothWaysLane instanceof Lane) lanes.add((Lane) _bothWaysLane);
+            pieces.add(_bothWaysLane);
+            double widthExistingStart = 0;
+            double widthExistingEnd = 0;
+
+            double widthAssumedStart = 0;
+            double widthAssumedEnd = 0;
+
+            for (RoadPiece r : pieces) {
+                String pieceWidthTagStart = r.widthTag(true);
+                String pieceWidthTagEnd = r.widthTag(false);
+                if (widthTagStart != null) {
+                    double val = Utils.parseWidth(pieceWidthTagStart);
+                    if (!Double.isNaN(val)) widthExistingStart += val;
+                }
+                if (widthTagEnd != null) {
+                    double val = Utils.parseWidth(pieceWidthTagEnd);
+                    if (!Double.isNaN(val)) widthExistingEnd += val;
+                }
+            }
+
+            for (RoadPiece r : lanes) {
+                String pieceWidthTagStart = r.widthTag(true);
+                String pieceWidthTagEnd = r.widthTag(false);
+                if (pieceWidthTagStart == null) {
+                    widthAssumedStart += r.getWidthTagged(true);
+                }
+                if (pieceWidthTagEnd == null) {
+                    widthAssumedEnd += r.getWidthTagged(false);
+                }
+            }
+
+            double widthAssumedStartShouldBe = Math.max(widthStart - widthExistingStart, 0);
+            double widthAssumedEndShouldBe = Math.max(widthEnd - widthExistingEnd, 0);
+            double multiplierStart = widthAssumedStartShouldBe/widthAssumedStart;
+            double multiplierEnd = widthAssumedEndShouldBe/widthAssumedEnd;
+            for (RoadPiece r : lanes) {
+                if (r.widthTag(true) == null) {
+                    ((Lane) r).setStartWidthMultiplier(multiplierStart);
+                }
+                if (r.widthTag(false) == null) {
+                    ((Lane) r).setEndWidthMultiplier(multiplierEnd);
+                }
+            }
+        }
     }
 
     private int getLanesInDirectionFromSuffix(int direction) {
         Map<String, String> tags = _way.getInterestingTags();
         int numLanes = -1;
         for (String key : tags.keySet()) {
-            if (!key.contains("note") && (direction == 1 ? ((key.endsWith(":lanes") && Utils.isOneway(_way)) || key.endsWith(":lanes:forward")) :
+            if (!key.contains("note") && (!key.contains("FIXME")) && (!key.contains("fixme")) && (direction == 1 ? ((key.endsWith(":lanes") && Utils.isOneway(_way)) || key.endsWith(":lanes:forward")) :
                     direction == 0 ? key.endsWith(":lanes:both_ways") : key.endsWith(":lanes:backward"))) {
 
                 // This runs if the tag being analyzed is a lane tag applying to this direction.
@@ -522,13 +594,13 @@ public class MarkedRoadRenderer extends RoadRenderer {
     }
 
     private Way getEdgeFromOffset(Way alignmentPart, int segment, double offsetStart, double offsetEnd) {
-        double swt = startPoints.size() == 0 ? 0 : (Math.max(startPoints.get(segment), 0)/getAlignment().getLength());
+        double swt = segmentStartPoints.size() == 0 ? 0 : (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
         double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
-        double ewt = endPoints.size() == 0 ? getAlignment().getLength() + 100 : (Math.min(endPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
+        double ewt = segmentEndPoints.size() == 0 ? getAlignment().getLength() + 100 : (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
         double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
         return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, startOffset, endOffset, false,
-                (startPoints.get(segment) < 0.1 || alignmentPart == null) ? otherStartAngle : Double.NaN,
-                (endPoints.get(segment) > getAlignment().getLength()-0.1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
+                (segmentStartPoints.get(segment) < 0.1 || alignmentPart == null) ? otherStartAngle : Double.NaN,
+                (segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
     }
 
     // </editor-fold>
@@ -632,11 +704,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
     public boolean mouseEventIsInside(MouseEvent e) {
         for (Polygon p : getAsphaltOutlinePixels()) if (p.contains(e.getPoint())) return true;
         return false;
-    }
-
-    private RoadPiece getSubPieceInside(MouseEvent e) {
-        for (RoadPiece r : getRoadPieces(false)) if (Utils.mouseEventIsInside(e, r.getAsphaltOutlines(), _mv)) return r;
-        return null;
     }
 
     // </editor-fold>

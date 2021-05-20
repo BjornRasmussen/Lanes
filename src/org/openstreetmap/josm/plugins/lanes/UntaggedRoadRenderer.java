@@ -3,15 +3,9 @@ package org.openstreetmap.josm.plugins.lanes;
 import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.BBox;
 import org.openstreetmap.josm.data.osm.Way;
-import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 public class UntaggedRoadRenderer extends RoadRenderer {
     boolean _valid;
@@ -37,9 +31,9 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     private void renderRoadEdges(Graphics2D g) {
         boolean o = _mv.getScale() > 1;
         Utils.renderRoadLine(g, _mv, this, 0, 0, (oneway()?0.5:1)*Utils.WIDTH_LANES,
-                (oneway()?0.5:1)*Utils.WIDTH_LANES, Utils.DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR);
+                (oneway()?0.5:1)*Utils.WIDTH_LANES, DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR, false);
         Utils.renderRoadLine(g, _mv, this, 0, 0, -(oneway()?0.5:1)*Utils.WIDTH_LANES,
-                -(oneway()?0.5:1)*Utils.WIDTH_LANES, Utils.DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR);
+                -(oneway()?0.5:1)*Utils.WIDTH_LANES, DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR, false);
     }
 
     @Override
@@ -51,16 +45,16 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     Way getLeftEdge(Way waySegment, int segment) {
         return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2),
                 (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                startPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
-                endPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
+                segmentStartPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
+                segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
     }
 
     @Override
     Way getRightEdge(Way waySegment, int segment) {
         return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2),
                 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                startPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
-                endPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
+                segmentStartPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
+                segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
     }
 
     private boolean oneway() {

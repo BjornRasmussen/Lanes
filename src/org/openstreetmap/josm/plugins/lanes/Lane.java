@@ -23,6 +23,8 @@ import java.util.List;
 public class Lane extends RoadPiece {
 
     private String change = null;
+    private double startWidthMultiplier = 1;
+    private double endWidthMultiplier = 1;
 
     public Lane(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         super(direction, position, mv, parent);
@@ -30,7 +32,12 @@ public class Lane extends RoadPiece {
 
     @Override
     public double getWidth(boolean start) {
-        String widthTag = getWidthTag(start);
+        return getWidthTagged(start) + (_direction == 0 ? 1 : -1) * Utils.RENDERING_WIDTH_DIVIDER;
+    }
+
+    @Override
+    public double getWidthTagged(boolean start) {
+        String widthTag = widthTag(start);
         double width = -1;
 
         if (widthTag != null && widthTag.equals("")) widthTag = null;
@@ -41,22 +48,20 @@ public class Lane extends RoadPiece {
             widthTag = null;
         }
 
+        if (Double.isNaN(width)) widthTag = null;
+
         if (widthTag == null) {
-            if (_direction == 0) {
-                return Utils.WIDTH_LANES + Utils.RENDERING_WIDTH_DIVIDER;
-            } else {
-                return Utils.WIDTH_LANES - Utils.RENDERING_WIDTH_DIVIDER;
-            }
+            width = isBikeLane() ? Utils.WIDTH_BIKE_LANES : Utils.WIDTH_LANES;
         }
 
-        return width + (_direction == 0 ? 1 : -1) * Utils.RENDERING_WIDTH_DIVIDER;
+        return width*(start ? startWidthMultiplier : endWidthMultiplier);
     }
 
     @Override
     public void render(Graphics2D g) {
         if (_direction == 0) {
             Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false),
-                    _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
+                    _offsetStart, _offsetEnd, DividerType.CENTRE_LANE, Color.YELLOW, false);
         }
         renderTurnMarkings(g);
     }
@@ -68,10 +73,51 @@ public class Lane extends RoadPiece {
             double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - _parent.getWidth(false)/2);
             Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
             Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.CENTRE_LANE, Color.YELLOW);
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_LANE, Color.YELLOW);
         }
     }
 
+    public void setStartWidthMultiplier(double newValue) {
+        startWidthMultiplier = newValue;
+    }
+
+    public void setEndWidthMultiplier(double newValue) {
+        endWidthMultiplier = newValue;
+    }
+
+    private boolean isBikeLane() {
+        // either bicycle:lanes=||designated or cycleway:lanes=||lane should make this lane a bike lane.
+        // Yes, this is terrible, but so is osm tagging.
+        return isBikeLaneMatchTag("cycleway:lanes", "lane") ||
+                (isBikeLaneMatchTag("bicycle:lanes", "designated") && !isBikeLaneMatchTag("motor_vehicle:lanes", "yes")
+                && !isBikeLaneMatchTag("motor_vehicle:lanes", "designated") && !isBikeLaneMatchTag("vehicle:lanes", "yes")
+                && !isBikeLaneMatchTag("vehicle:lanes", "designated") && !isBikeLaneMatchTag("bus:lanes", "designated")
+                && !isBikeLaneMatchTag("psv:lanes", "designated") && !isBikeLaneMatchTag("taxi:lanes", "designated")
+                && !isBikeLaneMatchTag("psv:lanes", "yes") && !isBikeLaneMatchTag("taxi:lanes", "yes")
+                && !isBikeLaneMatchTag("taxi:lanes", "designated"));
+    }
+
+    private boolean isBikeLaneMatchTag(String a, String b) {
+        // If the value of a at this lane equals b, return true.
+        if (_direction == 1) {
+            if (_way.hasTag(a + ":forward")) {
+                if (splitPos(_way.get(a + ":forward"), _position).equals(b)) {
+                    return true;
+                }
+            } else if (Utils.isOneway(_way) && _way.hasTag(a)) {
+                if (splitPos(_way.get(a), _position).equals(b)) {
+                    return true;
+                }
+            }
+        } else if (_direction == -1) {
+            if (_way.hasTag(a + ":backward")) {
+                if (splitPos(_way.get(a + ":backward"), _position).equals(b)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     public String getChange() {
         String output = "";
@@ -167,7 +213,8 @@ public class Lane extends RoadPiece {
         return null;
     }
 
-    public String getWidthTag(boolean start) {
+    @Override
+    public String widthTag(boolean start) {
         String output = "";
         if (_direction == 1) {
             if (start && _way.hasTag("width:lanes:forward:start")) {
@@ -240,8 +287,8 @@ public class Lane extends RoadPiece {
                 // This runs for each sub part of a road (each segment)
                 Way parentAlignment = _parent.getAlignments().get(h);
                 double alignmentLen = _parent.getAlignment().getLength();
-                double swt = Math.max(_parent.startPoints.get(h), 0)/_parent.getAlignment().getLength();
-                double ewt = Math.min(_parent.endPoints.get(h), alignmentLen) / alignmentLen;
+                double swt = Math.max(_parent.segmentStartPoints.get(h), 0)/_parent.getAlignment().getLength();
+                double ewt = Math.min(_parent.segmentEndPoints.get(h), alignmentLen) / alignmentLen;
                 double offsetStart = swt*_offsetEnd + (1-swt)*_offsetStart;
                 double offsetEnd = ewt*_offsetEnd + (1-ewt)*_offsetStart;
                 double widthStart = swt*getWidth(false) + (1-swt)*getWidth(true);

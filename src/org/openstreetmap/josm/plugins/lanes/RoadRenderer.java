@@ -16,8 +16,6 @@ public abstract class RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
-    List<Double> startPoints; // Measured in meters from start.
-    List<Double> endPoints; // Anything greater than or equal to way length means end.
 
     protected final Way _way;
     protected final MapView _mv;
@@ -28,6 +26,9 @@ public abstract class RoadRenderer {
     public double otherStartAngle = Double.NaN;
     public double otherEndAngle = Double.NaN;
 
+    // Store gaps added by intersections.
+    List<Double> segmentStartPoints; // Measured in meters from start.
+    List<Double> segmentEndPoints; // Anything greater than or equal to way length means end.
 
     // </editor-fold>
 
@@ -62,25 +63,25 @@ public abstract class RoadRenderer {
     public synchronized void addRenderingGap(double from, double to) {
         double min = Math.max(Math.min(from, to), 0);
         double max = Math.min(Math.max(from, to), getAlignment().getLength());
-        for (int i = 0; i < startPoints.size(); i++) {
-            double start = startPoints.get(i);
-            double end = endPoints.get(i);
+        for (int i = 0; i < segmentStartPoints.size(); i++) {
+            double start = segmentStartPoints.get(i);
+            double end = segmentEndPoints.get(i);
             if (max < end && min > start && max > start && min < end) { // completely inside
                 // Add new end at min, new start at max
-                endPoints.add(i, min);
-                startPoints.add(i+1, max);
+                segmentEndPoints.add(i, min);
+                segmentStartPoints.add(i+1, max);
                 return; // To avoid problems.
             } else if (max < end && min <= start && max > start) { // inside start half
                 // Move start to max
-                startPoints.set(i, max);
+                segmentStartPoints.set(i, max);
                 return;
             } else if (max >= end && min > start && min < end) { // inside end half
                 // Move end to min
-                endPoints.set(i, min);
+                segmentEndPoints.set(i, min);
             } else if (max >= end && min <= start) { // Outside, containing this range.
                 // Remove this range.
-                endPoints.remove(i);
-                startPoints.remove(i);
+                segmentEndPoints.remove(i);
+                segmentStartPoints.remove(i);
                 i--;
             }
         }
@@ -88,10 +89,10 @@ public abstract class RoadRenderer {
     }
 
     public void resetRenderingGaps() {
-        startPoints = new ArrayList<>();
-        startPoints.add(0.0);
-        endPoints = new ArrayList<>();
-        endPoints.add(_way.getLength() + 100);
+        segmentStartPoints = new ArrayList<>();
+        segmentStartPoints.add(0.0);
+        segmentEndPoints = new ArrayList<>();
+        segmentEndPoints.add(_way.getLength() + 100);
         _asphalt = null;
     }
 
@@ -99,9 +100,9 @@ public abstract class RoadRenderer {
     public List<Way> getAlignments() {
         // Returns sub parts of alignment.
         List<Way> output = new ArrayList<>();
-        for (int i = 0; i < startPoints.size(); i++) {
-            double start = Math.max(startPoints.get(i), 0);
-            double end = Math.min(endPoints.get(i), getAlignment().getLength());
+        for (int i = 0; i < segmentStartPoints.size(); i++) {
+            double start = Math.max(segmentStartPoints.get(i), 0);
+            double end = Math.min(segmentEndPoints.get(i), getAlignment().getLength());
             if (end-start < 0.01) continue;
             Way alignmentPart = Utils.getSubPart(getAlignment(), start, end);
 
@@ -258,8 +259,8 @@ public abstract class RoadRenderer {
         Point endLeft = Utils.goInDirection(end, bearing-Math.PI/2, pixelsPerMeter*(getWidth(false))/2 + 1);
         Point endRight = Utils.goInDirection(end, bearing+Math.PI/2, pixelsPerMeter*(getWidth(false))/2 + 1);
 
-        Utils.renderRoadLinePopup(g, startLeft, endLeft, bearing, 0, 0, pixelsPerMeter, Utils.DividerType.SOLID, left);
-        Utils.renderRoadLinePopup(g, startRight, endRight, bearing, 0, 0, pixelsPerMeter, Utils.DividerType.SOLID, right);
+        Utils.renderRoadLinePopup(g, startLeft, endLeft, bearing, 0, 0, pixelsPerMeter, DividerType.SOLID, left);
+        Utils.renderRoadLinePopup(g, startRight, endRight, bearing, 0, 0, pixelsPerMeter, DividerType.SOLID, right);
     }
 
     public List<Polygon> getAsphaltOutlinePixels() {
@@ -336,7 +337,7 @@ public abstract class RoadRenderer {
                 way.hasTag("psv:lanes") || way.hasTag("psv:lanes:forward") || way.hasTag("psv:lanes:backward") ||
                 way.hasTag("surface:lanes") || way.hasTag("surface:lanes:forward") || way.hasTag("surface:lanes:backward") ||
                 way.hasTag("bus:lanes") || way.hasTag("bus:lanes:forward") || way.hasTag("bus:lanes:backward")) ||
-                way.hasTag("lane_markings", "no"));
+                way.hasTag("lane_markings", "no") || way.hasTag("in_a_junction"));
     }
 
     private static boolean wayHasRoadTags(Way way) {

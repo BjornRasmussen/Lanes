@@ -1,7 +1,5 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import com.sun.tools.javac.Main;
-import org.openstreetmap.josm.command.ChangeCommand;
 import org.openstreetmap.josm.command.ChangePropertyCommand;
 import org.openstreetmap.josm.command.Command;
 import org.openstreetmap.josm.command.SequenceCommand;
@@ -18,8 +16,6 @@ import org.openstreetmap.josm.tools.RightAndLefthandTraffic;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
@@ -104,8 +100,7 @@ public class Utils {
     public Map<String, String> isCenterTurnLaneKnown = getYML("resources/renderinginfo/isCenterTurnLaneKnown");
 
     public enum LaneType {DRIVING, BICYCLE, BUS, HOV}
-    public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID, CENTRE_DIVIDER_WIDE,
-        CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE, UNMARKED_ROAD_EDGE, UNTAGGED_ROAD_EDGE}
+
     // </editor-fold>
 
 
@@ -219,6 +214,21 @@ public class Utils {
         a = a % (2*Math.PI);
         b = b % (2*Math.PI);
         return (Math.abs(a-b) < maxDiff) || (Math.abs(a+2*Math.PI-b) < maxDiff) || (Math.abs(a-2*Math.PI-b) < maxDiff);
+    }
+
+    public static double angleBetween(double a, double b) {
+        double ang1 = Math.abs(a-b);
+        double ang2 = Math.abs(a+Math.PI-b);
+        double ang3 = Math.abs(a-Math.PI-b);
+        return Math.min(Math.min(ang1, ang2), ang3);
+    }
+
+    public static double distPointLine(double x0, double x1, double x2,
+                                       double y0, double y1, double y2) {
+        // 0 is point, 1 & 2 are endpoints of line
+        double a = Math.abs((x2-x1)*(y1-y0) - (x1-x0)*(y2-y1));
+        double b = Math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1));
+        return a/b;
     }
 
     public static double bearingAt(Way w, double metersIn) {
@@ -398,7 +408,7 @@ public class Utils {
     // <editor-fold defaultstate=collapsed desc="Methods for Rendering">
 
     public static void renderRoadLine(Graphics2D g, MapView mv, RoadRenderer parent,
-                                      double widthStart, double widthEnd, double offsetStart, double offsetEnd, DividerType type, Color color) {
+                                      double widthStart, double widthEnd, double offsetStart, double offsetEnd, DividerType type, Color color, boolean roundEnds) {
         double pixelsPerMeter = 100.0 / mv.getDist100Pixel();
         double stripeWidth = 1.4/8;
 
@@ -413,48 +423,49 @@ public class Utils {
         } else if (type == DividerType.UNMARKED_ROAD_EDGE) {
             g.setStroke(getCustomStroke(pixelsPerMeter / 8 + 1, pixelsPerMeter * 3, 0, 0));
         } else if (type == DividerType.DOUBLE_SOLID) {
-            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color);
-            renderRoadLine(g, mv, parent, widthStart, widthEnd,offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color, false);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd,offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color, false);
             return;
         } else if (type == DividerType.DASHED_FOR_RIGHT) {
-            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color);
-            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.DASHED, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.SOLID, color, false);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.DASHED, color, false);
             return;
         } else if (type == DividerType.DASHED_FOR_LEFT) {
-            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color);
-            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.DASHED, color);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - stripeWidth, offsetEnd - stripeWidth, DividerType.SOLID, color, false);
+            renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + stripeWidth, offsetEnd + stripeWidth, DividerType.DASHED, color, false);
             return;
         } else if (type == DividerType.CENTRE_DIVIDER_WIDE) {
             renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color);
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color, false);
             renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color);
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DOUBLE_SOLID, color, false);
             return;
         } else if (type == DividerType.FORWARD_DIVIDER_WIDE || type == DividerType.BACKWARD_DIVIDER_WIDE) {
             renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color, false);
             renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color);
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.SOLID, color, false);
             return;
         } else if (type == DividerType.CENTRE_LANE) {
             renderRoadLine(g, mv, parent, widthStart, widthEnd,offsetStart + ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_RIGHT, color);
+                    offsetEnd + ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_RIGHT, color, false);
             renderRoadLine(g, mv, parent, widthStart, widthEnd, offsetStart - ((widthStart-RENDERING_WIDTH_DIVIDER) / 2),
-                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_LEFT, color);
+                    offsetEnd - ((widthEnd-RENDERING_WIDTH_DIVIDER) / 2), DividerType.DASHED_FOR_LEFT, color, false);
             return;
         }
         List<Way> parentAlignments = parent.getAlignments();
         g.setColor(color);
 
         for (int i = 0; i < parentAlignments.size(); i++) {
-            double swt = (Math.max(parent.startPoints.get(i), 0)/parent.getAlignment().getLength());
+            // runs for each section of road shared by the way.  A way gets split into two sections if it has an intersection in the middle.
+            double swt = (Math.max(parent.segmentStartPoints.get(i), 0)/parent.getAlignment().getLength());
             double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
-            double ewt = (Math.min(parent.endPoints.get(i), parent.getAlignment().getLength())/parent.getAlignment().getLength());
+            double ewt = (Math.min(parent.segmentEndPoints.get(i), parent.getAlignment().getLength())/parent.getAlignment().getLength());
             double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
             Way alignment = getParallel(parentAlignments.get(i), startOffset, endOffset, false,
-                    parent.startPoints.get(i) < 0.1 ? parent.otherStartAngle : Double.NaN,
-                    parent.endPoints.get(i) > parent.getAlignment().getLength() - 0.1 ? parent.otherEndAngle : Double.NaN);
-
+                    parent.segmentStartPoints.get(i) < 0.1 ? parent.otherStartAngle : Double.NaN,
+                    parent.segmentEndPoints.get(i) > parent.getAlignment().getLength() - 0.1 ? parent.otherEndAngle : Double.NaN);
+//            UtilsRender.drawOnMap(g, mv, alignment, color, new float[] {1}, 0.125F, false, true, false);
             int[] xPoints = new int[alignment.getNodesCount()];
             int[] yPoints = new int[alignment.getNodesCount()];
 
@@ -846,7 +857,7 @@ public class Utils {
         boolean goAbove = e.getY() - 30 > mainPanel.getHeight();
         w.setLocation(goAbove ? aboveMouse : belowMouse);
         w.setVisible(true);
-
+        long timeSetVisible = System.currentTimeMillis();
         // <editor-fold defaultstate=collapsed desc="Things that close the Window">
 
         // * Map moved / zoom changed
@@ -861,7 +872,7 @@ public class Utils {
                         Math.abs(mv.getCenter().getY() - center.getY()) > 0.001) {
                     scale = mv.getScale();
                     center = mv.getCenter();
-                    unClick(w, mv);
+                    unClick(w, mv, timeSetVisible);
                 }
             }
         });
@@ -870,7 +881,7 @@ public class Utils {
         mv.addMouseListener(new MouseListener() {
             @Override
             public void mousePressed(MouseEvent e) {
-                unClick(w, mv);
+                unClick(w, mv, timeSetVisible);
             }
 
             @Override
@@ -913,22 +924,23 @@ public class Utils {
             }
 
             private void verifyExistence() {
-                if (way.isDeleted()) unClick(w, mv);
+                if (way.isDeleted()) unClick(w, mv, timeSetVisible);
             }
         });
 
         // * Map Mode Changes
-        l.addQuitListener(new ChangeListener() {
-            @Override
-            public void stateChanged(ChangeEvent e) {
-                unClick(w, mv);
-            }
-        });
+        l.addQuitListener(e1 -> unClick(w, mv, timeSetVisible));
 
         // </editor-fold>
     }
 
-    private static void unClick(Window w, MapView mv) {
+    private static void unClick(Window w, MapView mv, long timeSetVisible) {
+        int wait = 200;
+        if (timeSetVisible + wait > System.currentTimeMillis()) {
+            try {
+                Thread.sleep(Math.max(wait - (System.currentTimeMillis()-timeSetVisible), 10));
+            } catch (InterruptedException ignored) {}
+        }
         w.setVisible(false);
         mv.repaint();
     }

@@ -1,0 +1,14 @@
+Project Structure:
+The plugin is initiated from the LanesPlugin class, which runs when JOSM boots up.
+
+When the plugin is launched, `LaneMappingMode.enterMode()` is called, which does the following:
+* Fetches the currently active data
+* Creates a list of `RoadRenderer`s (using RoadRenderer.buildRenderer() to determine which kind)
+* Creates a list of `IntersectionRenderer`s, first using just nodes,
+  then combining overlapping intersections to create more complex intersections.
+ 
+The rendering handled through `LaneMappingMode.paint()`, which calls each `RoadRenderer` and `IntersectionRenderer` to handle rendering of themselves.
+
+
+
+`MarkedRoadRenderers` have an object for each lane or divider.

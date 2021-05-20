@@ -19,7 +19,7 @@ import java.util.List;
  */
 
 public class Divider extends RoadPiece {
-    Utils.DividerType _type = null;
+    DividerType _type = null;
 
     public Divider(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
         super(direction, position, mv, parent);
@@ -27,11 +27,23 @@ public class Divider extends RoadPiece {
 
     @Override
     public double getWidth(boolean start) {
-        // Returns width of rendered component in meters, not width of actual lane divider.
-        double output = 0;
+        // Returns width of rendered component, not actual divider.
+        return getWidthTagged(start) + Utils.RENDERING_WIDTH_DIVIDER;
+    }
+
+    @Override
+    public double getWidthTagged(boolean start) {
+        // Returns width of divider, not rendered component.
+        double output = Utils.parseWidth(widthTag(start));
+        if (Double.isNaN(output)) output = 0;
+        return output;
+    }
+
+    @Override
+    String widthTag(boolean start) {
         String laneSymbol = "\\|"; // This is what is used between divider widths to mark a lane.
+        String value = null;
         try {
-            String value = "0";
             if (_direction == 0) {
                 if (_way.hasTag("width:centre_divider:start") && start) {
                     value = _way.getInterestingTags().get("width:centre_divider:start");
@@ -39,10 +51,7 @@ public class Divider extends RoadPiece {
                     value = _way.getInterestingTags().get("width:centre_divider:end");
                 } else if (_way.hasTag("width:centre_divider")) {
                     value = _way.getInterestingTags().get("width:centre_divider");
-                } else {
-                    value = "0";
                 }
-                output = Utils.parseWidth(value);
             }
             if (_direction == 1) {
                 if (_way.hasTag("width:dividers:forward:start") && start) {
@@ -58,7 +67,6 @@ public class Divider extends RoadPiece {
                 } else if (_way.hasTag("width:dividers") && _way.isOneway() == 1) {
                     value = _way.getInterestingTags().get("width:dividers").split(laneSymbol)[_position];
                 }
-                output = Utils.parseWidth(value);
             }
             if (_direction == -1) {
                 if (_way.hasTag("width:dividers:backward:start") && start) {
@@ -68,11 +76,9 @@ public class Divider extends RoadPiece {
                 } else if (_way.hasTag("width:dividers:backward")) {
                     value = _way.getInterestingTags().get("width:dividers:backward").split(laneSymbol)[_position];
                 }
-                output = Utils.parseWidth(value);
             }
         } catch (Exception ignored) {}
-        if (Double.isNaN(output)) output = 0;
-        return output + Utils.RENDERING_WIDTH_DIVIDER;
+        return value;
     }
 
     @Override
@@ -81,24 +87,24 @@ public class Divider extends RoadPiece {
 
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW, false);
         }
         else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE, false);
         }
         else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                     getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE, false);
         }
         else {
             if (_type == null) getDividerType();
-            Utils.DividerType type = _type;
+            DividerType type = _type;
             if (_direction == -1) {
-                if (_type == Utils.DividerType.DASHED_FOR_RIGHT) type = Utils.DividerType.DASHED_FOR_LEFT;
-                if (_type == Utils.DividerType.DASHED_FOR_LEFT) type = Utils.DividerType.DASHED_FOR_RIGHT;
+                if (_type == DividerType.DASHED_FOR_RIGHT) type = DividerType.DASHED_FOR_LEFT;
+                if (_type == DividerType.DASHED_FOR_LEFT) type = DividerType.DASHED_FOR_RIGHT;
             }
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
+            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE, false);
         }
     }
 
@@ -112,22 +118,22 @@ public class Divider extends RoadPiece {
 
         if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                 getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
         }
         else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                 getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
                 getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, Utils.DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
+            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else {
             if (_type == null) getDividerType();
-            Utils.DividerType type = _type;
+            DividerType type = _type;
             if (_direction == -1) {
-                if (_type == Utils.DividerType.DASHED_FOR_RIGHT) type = Utils.DividerType.DASHED_FOR_LEFT;
-                if (_type == Utils.DividerType.DASHED_FOR_LEFT) type = Utils.DividerType.DASHED_FOR_RIGHT;
+                if (_type == DividerType.DASHED_FOR_RIGHT) type = DividerType.DASHED_FOR_LEFT;
+                if (_type == DividerType.DASHED_FOR_LEFT) type = DividerType.DASHED_FOR_RIGHT;
             }
             Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
         }
@@ -146,20 +152,20 @@ public class Divider extends RoadPiece {
         JPanel output = new JPanel();
         output.setLayout(new GridLayout(0, _direction == 0 ? 4 /* fixme make 6 */ : 4));
         if (_direction == 0) {
-            output.add(getIconButton(Utils.DividerType.SOLID, "SolidCentre"));
-            output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeftCentre"));
-            output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRightCentre"));
-            output.add(getIconButton(Utils.DividerType.DASHED, "DashedCentre"));
+            output.add(getIconButton(DividerType.SOLID, "SolidCentre"));
+            output.add(getIconButton(DividerType.DASHED_FOR_RIGHT, "SolidLeftCentre"));
+            output.add(getIconButton(DividerType.DASHED_FOR_LEFT, "SolidRightCentre"));
+            output.add(getIconButton(DividerType.DASHED, "DashedCentre"));
         } else {
-            output.add(getIconButton(Utils.DividerType.SOLID, "Solid"));
-            output.add(getIconButton(Utils.DividerType.DASHED_FOR_RIGHT, "SolidLeft"));
-            output.add(getIconButton(Utils.DividerType.DASHED_FOR_LEFT, "SolidRight"));
-            output.add(getIconButton(Utils.DividerType.DASHED, "Dashed"));
+            output.add(getIconButton(DividerType.SOLID, "Solid"));
+            output.add(getIconButton(DividerType.DASHED_FOR_RIGHT, "SolidLeft"));
+            output.add(getIconButton(DividerType.DASHED_FOR_LEFT, "SolidRight"));
+            output.add(getIconButton(DividerType.DASHED, "Dashed"));
         }
         return output;
     }
 
-    private JPanel getIconButton(Utils.DividerType type, String path) {
+    private JPanel getIconButton(DividerType type, String path) {
         JPanel buttonWrapper = new JPanel();
         buttonWrapper.setBorder(new StrokeBorder(new BasicStroke(5, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND),
                 new Color(0, 0, 0, 0)));
@@ -173,7 +179,7 @@ public class Divider extends RoadPiece {
         return buttonWrapper;
     }
 
-    private MouseListener getButtonMouseListener(Utils.DividerType type) {
+    private MouseListener getButtonMouseListener(DividerType type) {
         return new MouseListener() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -221,26 +227,26 @@ public class Divider extends RoadPiece {
                 Math.abs(_right.getWidth(true) - _right.getWidth(false)) > 0.5;
 
         // Set the divider type based on the known information:
-        Utils.DividerType typeIfDashed = (cd || !widthChanges) ? Utils.DividerType.DASHED : Utils.DividerType.QUICK_DASHED;
+        DividerType typeIfDashed = (cd || !widthChanges) ? DividerType.DASHED : DividerType.QUICK_DASHED;
 
-        Utils.DividerType typeIfNotDashed = (changeFromLeft) ? Utils.DividerType.DASHED_FOR_LEFT :
-                                            (changeFromRight) ? Utils.DividerType.DASHED_FOR_RIGHT :
-                                            cd ? Utils.DividerType.DOUBLE_SOLID : Utils.DividerType.SOLID;
+        DividerType typeIfNotDashed = (changeFromLeft) ? DividerType.DASHED_FOR_LEFT :
+                                            (changeFromRight) ? DividerType.DASHED_FOR_RIGHT :
+                                            cd ? DividerType.DOUBLE_SOLID : DividerType.SOLID;
 
         _type = (changeFromLeft && changeFromRight) ? typeIfDashed : typeIfNotDashed;
     }
 
-    private void setDividerType(Utils.DividerType type) {
+    private void setDividerType(DividerType type) {
         // Define cd and rh to make the logic statements more readable:
         boolean cd = _direction == 0;
         boolean rh = Utils.isRightHand(_way);
 
         // Convert DividerType to change from left/right:
-        boolean changeFromLeft = type == Utils.DividerType.DASHED ||
-                type == Utils.DividerType.DASHED_FOR_LEFT || type == Utils.DividerType.QUICK_DASHED;
-        boolean changeFromRight = type == Utils.DividerType.SOLID || type == Utils.DividerType.SOLID_DIVIDER_WIDE ||
-                type == Utils.DividerType.DOUBLE_SOLID || type==Utils.DividerType.CENTRE_DIVIDER_WIDE ||
-                type == Utils.DividerType.DASHED_FOR_LEFT;
+        boolean changeFromLeft = type == DividerType.DASHED ||
+                type == DividerType.DASHED_FOR_LEFT || type == DividerType.QUICK_DASHED;
+        boolean changeFromRight = type == DividerType.SOLID || type == DividerType.SOLID_DIVIDER_WIDE ||
+                type == DividerType.DOUBLE_SOLID || type==DividerType.CENTRE_DIVIDER_WIDE ||
+                type == DividerType.DASHED_FOR_LEFT;
 
         // Extract existing change values from nearby lanes:
         boolean leftChangeLeft   = extractChange((Lane) _left,  false);

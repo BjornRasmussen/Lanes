@@ -36,10 +36,13 @@ public abstract class IntersectionRenderer {
     protected List<Double> _rightBearings;
     protected List<Double> _leftBearings;
     protected List<Way> _roadMarkings;
+    protected List<Way> _roadMarkingsSimplified;
     protected List<Node> _ordering;
     protected List<Node> _vertextOrdering;
 
     protected List<LatLon> _bruh = new ArrayList<>();
+
+    protected double meters100PixLastRender = -1; // for know if the zoom has been changed since last render.
 
     protected boolean _isValid = true;
 
@@ -68,6 +71,8 @@ public abstract class IntersectionRenderer {
         _leftPoints = new ArrayList<>();
         _rightBearings = new ArrayList<>();
         _leftBearings = new ArrayList<>();
+
+        _roadMarkingsSimplified = null; // Must be reset to null every time data changes.
 
 
         // Get useful info about this intersection.
@@ -315,7 +320,7 @@ public abstract class IntersectionRenderer {
                 if (bezierNodes.size() == 0 || bezierNodes.size() > 20) continue;
 
                 // Generate curve
-                int nodes = 100;
+                int nodes = 60;
                 int nodesLowRes = 2;
                 List<Node> curve = new ArrayList<>();
                 List<Node> curveLowRes = new ArrayList<>();
@@ -355,43 +360,34 @@ public abstract class IntersectionRenderer {
     public void render(Graphics2D g) {
         try {
             // Fill in asphalt.
-            int[] xPoints = new int[_outline.getNodesCount()];
-            int[] yPoints = new int[_outline.getNodesCount()];
-            for (int i = 0; i < _outline.getNodesCount(); i++) {
-                xPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getX() + 0.5);
-                yPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getY() + 0.5);
-            }
-            g.setColor(Utils.DEFAULT_ASPHALT_COLOR);
-            g.fillPolygon(xPoints, yPoints, xPoints.length);
+            UtilsRender.drawOnMap(g, _mv, _outline, Utils.DEFAULT_ASPHALT_COLOR,
+                    null, 1, true, false, false);
 
             // Draw road lines:
-            double pixelsPerMeter = 100 / _mv.getDist100Pixel();
-            for (Way w : _roadMarkings) {
-                if (w == null) continue;
-                // To reduce jitter, ensure no more than one vertex per 10 pixels or so. TODO use better simplification
-                int everyNth = Math.max((int) (w.getNodesCount() / (Math.max(w.getLength() * pixelsPerMeter / 7, 10)) + 1.5), 1);
-                xPoints = new int[w.getNodesCount()];
-                yPoints = new int[w.getNodesCount()];
-                int num = 0;
-                int topLefts = 0;
-                for (int i = 0; i < w.getNodesCount(); i++) {
-                    if (i % everyNth != 0 && i != w.getNodesCount() - 1) continue;
-                    xPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getX() + 0.5);
-                    yPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getY() + 0.5);
-                    if (xPoints[num] == 0 && yPoints[num] == 0) topLefts++;
-                    num++;
-                }
-                g.setColor(Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR);
-                g.setStroke(GuiHelper.getCustomizedStroke((12.5 / _mv.getDist100Pixel() + 1) + ""));
-                if (topLefts < 2)
-                    g.drawPolyline(xPoints, yPoints, num); // Render road line unless it would shoot to the top left point of the screen.
+            double ratio = meters100PixLastRender/_mv.getDist100Pixel();
+            boolean simplify = false;
+            boolean mustUpdate = false;
+
+            if (_roadMarkingsSimplified == null) {
+                _roadMarkingsSimplified = new ArrayList<>();
+                for (int i = 0; i < _roadMarkings.size(); i++) _roadMarkingsSimplified.add(new Way());
+                mustUpdate = true;
             }
 
-            g.setStroke(new BasicStroke(10));
-            g.setColor(Color.GREEN);
+            if (ratio > 1.5 || ratio < 0.75 || mustUpdate) {
+                simplify = true;
+                for (int i = 0; i < _roadMarkingsSimplified.size(); i++) {
+                    _roadMarkingsSimplified.get(i).setNodes(_roadMarkings.get(i).getNodes());
+                }
+                meters100PixLastRender = _mv.getDist100Pixel();
+            }
+            for (Way w : _roadMarkingsSimplified) {
+                UtilsRender.drawOnMap(g, _mv, w, Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR,
+                        null, 0.125F, false, true, simplify);
+            }
 
 //        // DRAW PERIMETER
-
+//
 //        g.setStroke(new BasicStroke(10));
 //        for (int i = 0; i < _backbones.size(); i++) {
 //            if (_backbones.get(i) == null) continue;
@@ -404,15 +400,15 @@ public abstract class IntersectionRenderer {
 //            }
 //            g.drawPolyline(xPoints2, yPoints2, xPoints2.length);
 //        }
-
-        g.setStroke(new BasicStroke(10));
-        g.setColor(Color.RED);
-        for (int i = 0; i < _bruh.size(); i++) {
-            int x = (int) (_mv.getPoint(_bruh.get(i)).getX() + 0.5);
-            int y = (int) (_mv.getPoint(_bruh.get(i)).getY() + 0.5);
-            g.drawLine(x, y, x, y);
-        }
-
+//
+//        g.setStroke(new BasicStroke(10));
+//        g.setColor(Color.RED);
+//        for (int i = 0; i < _bruh.size(); i++) {
+//            int x = (int) (_mv.getPoint(_bruh.get(i)).getX() + 0.5);
+//            int y = (int) (_mv.getPoint(_bruh.get(i)).getY() + 0.5);
+//            g.drawLine(x, y, x, y);
+//        }
+//
 //            if (_ordering != null) {
 //                g.setColor(Color.RED);
 //                for (int i = 0; i < _ordering.size(); i++) {
@@ -428,10 +424,10 @@ public abstract class IntersectionRenderer {
 //                    g.drawString(i + "", x, y);
 //                }
 //            }
-
-            // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
-            g.setColor(new Color(0, 0, 0, 0));
-            g.setStroke(GuiHelper.getCustomizedStroke("0"));
+//
+//            // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
+//            g.setColor(new Color(0, 0, 0, 0));
+//            g.setStroke(GuiHelper.getCustomizedStroke("0"));
         } catch (Exception ignored) {}
     }
 

@@ -49,6 +49,10 @@ abstract class RoadPiece {
 
     abstract double getWidth(boolean start);
 
+    abstract double getWidthTagged(boolean start);
+
+    abstract String widthTag(boolean start);
+
     abstract void render(Graphics2D g);
 
     abstract void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter);
@@ -64,9 +68,9 @@ abstract class RoadPiece {
 
     protected List<Polygon> getAsphaltOutlines() {
         List<Polygon> output = new ArrayList<>();
-        for (int i = 0; i < _parent.startPoints.size(); i++) {
-            double swt = (Math.max(_parent.startPoints.get(i), 0)/_parent.getAlignment().getLength());
-            double ewt = (Math.min(_parent.endPoints.get(i), _parent.getAlignment().getLength())/_parent.getAlignment().getLength());
+        for (int i = 0; i < _parent.segmentStartPoints.size(); i++) {
+            double swt = (Math.max(_parent.segmentStartPoints.get(i), 0)/_parent.getAlignment().getLength());
+            double ewt = (Math.min(_parent.segmentEndPoints.get(i), _parent.getAlignment().getLength())/_parent.getAlignment().getLength());
 
             double widthStart = swt*getWidth(false) + (1-swt)*getWidth(true);
             double widthEnd = ewt*getWidth(false) + (1-ewt)*getWidth(true);
@@ -74,7 +78,7 @@ abstract class RoadPiece {
             double startOffset = swt*_offsetEnd + (1-swt)*_offsetStart;
             double endOffset = ewt*_offsetEnd + (1-ewt)*_offsetStart;
 
-            Way subpart = Utils.getSubPart(_parent.getAlignment(), _parent.startPoints.get(i), _parent.endPoints.get(i));
+            Way subpart = Utils.getSubPart(_parent.getAlignment(), _parent.segmentStartPoints.get(i), _parent.segmentEndPoints.get(i));
             Way left = Utils.getParallel(subpart, startOffset + (widthStart / 2.0), endOffset + (widthEnd / 2.0),
                     false, _parent.otherStartAngle, _parent.otherEndAngle);
             Way right = Utils.getParallel(subpart, startOffset - (widthStart / 2.0), endOffset - (widthEnd / 2.0),

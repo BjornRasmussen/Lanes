@@ -51,29 +51,6 @@ public class MarkedRoadRenderer extends RoadRenderer {
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
     public void render(Graphics2D g) {
-        if (!_isValid) {
-            // Get the centre line of the road to be rendered.
-            int[] pointXs = new int[_way.getNodesCount()];
-            int[] pointYs = new int[_way.getNodesCount()];
-            for (int i = 0; i < _way.getNodesCount(); i++) {
-                pointXs[i] = _mv.getPoint(_way.getNode(i).getCoor()).x;
-                pointYs[i] = _mv.getPoint(_way.getNode(i).getCoor()).y;
-            }
-
-            // Set the color and width to the "invalid" defaults.
-            g.setColor(Utils.DEFAULT_INVALID_COLOR);
-            g.setStroke(new BasicStroke((int) (Utils.
-                    WIDTH_INVALID_METERS * 100.0 / _mv.getDist100Pixel()),
-                    BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
-
-            // Draw the way
-            g.drawPolyline(pointXs, pointYs, pointXs.length);
-
-            // Get rid of that white rectangle that was appearing around the screen at high zoom levels:
-            g.setColor(new Color(0, 0, 0, 0));
-            g.setStroke(GuiHelper.getCustomizedStroke("0"));
-            return;
-        }
         try {
             renderAsphalt(g, Utils.DEFAULT_ASPHALT_COLOR);
             List<RoadPiece> roadPieces = getRoadPieces(true);
@@ -580,27 +557,30 @@ public class MarkedRoadRenderer extends RoadRenderer {
     }
 
     @Override
-    public Way getLeftEdge(Way alignmentPart, int segment) {
-        double offsetStart = _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0);
-        double offsetEnd = _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0);
-        return getEdgeFromOffset(alignmentPart, segment, offsetStart, offsetEnd);
-    }
+    public Way getEdge(int segment /* can be -1 for all */, boolean right) {
+        // Get offset for this side at start/end.
+        double offsetStart, offsetEnd;
+        if (right) {
+            offsetStart = _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0);
+            offsetEnd = _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0);
+        } else {
+            offsetStart = _leftRoadEdge._offsetStart + (_leftRoadEdge.getWidth(true) / 2.0);
+            offsetEnd = _leftRoadEdge._offsetEnd + (_leftRoadEdge.getWidth(false) / 2.0);
+        }
 
-    @Override
-    public Way getRightEdge(Way alignmentPart, int segment) {
-        double offsetStart = _rightRoadEdge._offsetStart - (_rightRoadEdge.getWidth(true) / 2.0);
-        double offsetEnd = _rightRoadEdge._offsetEnd - (_rightRoadEdge.getWidth(false) / 2.0);
-        return getEdgeFromOffset(alignmentPart, segment, offsetStart, offsetEnd);
-    }
+        // Get alignment part.
+        Way alignmentPart = (segment < 0) ? getAlignment() : getAlignments().get(segment);
 
-    private Way getEdgeFromOffset(Way alignmentPart, int segment, double offsetStart, double offsetEnd) {
-        double swt = segmentStartPoints.size() == 0 ? 0 : (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
+        // Get offsets for the specific alignment part.
+        double swt = (segmentStartPoints.size() == 0 || segment < 0) ? 0 : (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
         double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
-        double ewt = segmentEndPoints.size() == 0 ? getAlignment().getLength() + 100 : (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
+        double ewt = (segmentEndPoints.size() == 0 || segment < 0) ? getAlignment().getLength() + 100 : (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
         double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
-        return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, startOffset, endOffset, false,
-                (segmentStartPoints.get(segment) < 0.1 || alignmentPart == null) ? otherStartAngle : Double.NaN,
-                (segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
+
+        // Generate parallel way.
+        return Utils.getParallel(alignmentPart, startOffset, endOffset, false,
+                (segment < 0 || segmentStartPoints.get(segment) < 0.1) ? otherStartAngle : Double.NaN,
+                (segment < 0 || segmentEndPoints.get(segment) > getAlignment().getLength()-0.1) ? otherEndAngle : Double.NaN);
     }
 
     // </editor-fold>

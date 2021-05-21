@@ -19,7 +19,7 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     void render(Graphics2D g) {
         renderAsphalt(g, Utils.DEFAULT_UNTAGGED_ASPHALT_COLOR);
         renderRoadEdges(g);
-        renderQuestionMarks(g);
+        renderQuestionOrExclamationMarks(g);
     }
 
     @Override
@@ -29,10 +29,10 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     }
 
     private void renderRoadEdges(Graphics2D g) {
-        boolean o = _mv.getScale() > 1;
-        Utils.renderRoadLine(g, _mv, this, 0, 0, (oneway()?0.5:1)*Utils.WIDTH_LANES,
+        boolean o = _parent._mv.getScale() > 1;
+        Utils.renderRoadLine(g, _parent._mv, this, 0, 0, (oneway()?0.5:1)*Utils.WIDTH_LANES,
                 (oneway()?0.5:1)*Utils.WIDTH_LANES, DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR, false);
-        Utils.renderRoadLine(g, _mv, this, 0, 0, -(oneway()?0.5:1)*Utils.WIDTH_LANES,
+        Utils.renderRoadLine(g, _parent._mv, this, 0, 0, -(oneway()?0.5:1)*Utils.WIDTH_LANES,
                 -(oneway()?0.5:1)*Utils.WIDTH_LANES, DividerType.UNTAGGED_ROAD_EDGE, o ? Color.RED : Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR, false);
     }
 
@@ -42,26 +42,19 @@ public class UntaggedRoadRenderer extends RoadRenderer {
     }
 
     @Override
-    Way getLeftEdge(Way waySegment, int segment) {
-        return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2),
-                (oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                segmentStartPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
-                segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
-    }
-
-    @Override
-    Way getRightEdge(Way waySegment, int segment) {
-        return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(), 0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2),
-                0 - (oneway()?0.5:1)*Utils.WIDTH_LANES - (Utils.RENDERING_WIDTH_DIVIDER/2), false,
-                segmentStartPoints.get(segment) < 0.1 || waySegment == null ? otherStartAngle : Double.NaN,
-                segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null ? otherEndAngle : Double.NaN);
+    Way getEdge(int segment, boolean right) {
+        Way alignmentPart = segment < 0 ? getAlignment() : getAlignments().get(segment);
+        double offset = ((oneway() ? 0.5 : 1)*Utils.WIDTH_LANES+(Utils.RENDERING_WIDTH_DIVIDER/2))*(right ? -1 : 1);
+        return Utils.getParallel(alignmentPart, offset, offset, false,
+                (segment < 0 || segmentStartPoints.get(segment) < 0.1) ? otherStartAngle : Double.NaN,
+                (segment < 0 || segmentEndPoints.get(segment) > getAlignment().getLength()-0.1) ? otherEndAngle : Double.NaN);
     }
 
     private boolean oneway() {
         return Utils.isOneway(getWay());
     }
 
-    private void renderQuestionMarks(Graphics2D g) {
+    private void renderQuestionOrExclamationMarks(Graphics2D g) { // TODO extract part that finds WHERE to draw and merge with other marking drawers.
         if (_mv.getScale() > 1) return; // Don't render the question marks when the map is too zoomed out
 
         try {
@@ -78,15 +71,15 @@ public class UntaggedRoadRenderer extends RoadRenderer {
                         double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
                         LatLon pos = new LatLon(align.getNode(i).lat() * portionFirst + (align.getNode(i + 1).lat() * (1 - portionFirst)),
                                 align.getNode(i).lon() * portionFirst + (align.getNode(i + 1).lon() * (1 - portionFirst)));
-                        Point point = _mv.getPoint(pos);
+                        Point point = _parent._mv.getPoint(pos);
                         double width = (oneway() ? 0.7 : 1.4) * Utils.WIDTH_LANES;
 
-                        BBox bBox = _mv.getRealBounds().toBBox();
-                        if (!(((point.x < _mv.getPoint(bBox.getTopLeft()).x) || (point.x > _mv.getPoint(bBox.getBottomRight()).x)) &&
-                                ((point.y < _mv.getPoint(bBox.getTopLeft()).y) || (point.y > _mv.getPoint(bBox.getBottomRight()).y))) ) {
+                        BBox bBox = _parent._mv.getRealBounds().toBBox();
+                        if (!(((point.x < _parent._mv.getPoint(bBox.getTopLeft()).x) || (point.x > _parent._mv.getPoint(bBox.getBottomRight()).x)) &&
+                                ((point.y < _parent._mv.getPoint(bBox.getTopLeft()).y) || (point.y > _parent._mv.getPoint(bBox.getBottomRight()).y))) ) {
 
-                            int size = (int) (width * 100 / _mv.getDist100Pixel()) + 1;
-                            int offset = (int) (width * 50 / _mv.getDist100Pixel());
+                            int size = (int) (width * 100 / _parent._mv.getDist100Pixel()) + 1;
+                            int offset = (int) (width * 50 / _parent._mv.getDist100Pixel());
                             g.drawImage(_mv.getScale() > (oneway() ? 0.04 : 0.08) ? (_valid ? Utils.lr_questionMark : Utils.lr_exclamationPoint) :
                                     (_valid ? Utils.questionMark : Utils.exclamationPoint), point.x - offset, point.y - offset, size, size, null);
                         }
@@ -103,6 +96,5 @@ public class UntaggedRoadRenderer extends RoadRenderer {
 
     @Override
     public double getWidth(boolean start) { return Utils.WIDTH_LANES*(Utils.isOneway(_way) ? 1 : 2) + Utils.RENDERING_WIDTH_DIVIDER; }
-
 
 }

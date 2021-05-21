@@ -38,32 +38,24 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
     }
 
     @Override
-    Way getLeftEdge(Way waySegment, int segment) {
-        return getEdge(waySegment, segment, false);
-    }
+    public Way getEdge(int segment, boolean rightSide) {
+        Way alignmentPart = (segment < 0) ? getAlignment() : getAlignments().get(segment);
 
-    @Override
-    Way getRightEdge(Way waySegment, int segment) {
-        return getEdge(waySegment, segment, true);
-    }
-
-    private Way getEdge(Way waySegment, int segment, boolean rightSide) {
-        double swt = (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
+        // Calculate start/end offsets for this segment.
+        double swt = Math.max(segmentStartPoints.get(segment < 0 ? 0 : segment), 0)/getAlignment().getLength();
         double offsetStart = swt*(getWidth(false)/2) + (1-swt)*(getWidth(true)/2);
-        double ewt = (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
+        double ewt = Math.min(segmentEndPoints.get(segment < 0 ? segmentEndPoints.size()-1 : segment), getAlignment().getLength())/getAlignment().getLength();
         double offsetEnd = ewt*(getWidth(false)/2) + (1-ewt)*(getWidth(true)/2);
 
+        // If right side, then the values need to be negative to get same result.
         if (rightSide) {
-            return Utils.getParallel((waySegment != null) ? waySegment : getAlignment(),
-                    0 - offsetStart, 0 - offsetEnd, false,
-                    (segmentStartPoints.get(segment) < 0.1 || waySegment == null) ? otherStartAngle : Double.NaN,
-                    (segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null) ? otherEndAngle : Double.NaN);
-        } else {
-            return Utils.getParallel(waySegment != null ? waySegment : getAlignment(),
-                    offsetStart, offsetEnd, false,
-                    (segmentStartPoints.get(segment) < 0.1 || waySegment == null) ? otherStartAngle : Double.NaN,
-                    (segmentEndPoints.get(segment) > getAlignment().getLength()-0.1 || waySegment == null) ? otherEndAngle : Double.NaN);
+            offsetStart = 0 - offsetStart;
+            offsetEnd = 0 - offsetEnd;
         }
+
+        return Utils.getParallel(alignmentPart, offsetStart, offsetEnd, false,
+                (segment < 0 || segmentStartPoints.get(segment) < 0.1) ? otherStartAngle : Double.NaN,
+                (segment < 0 || segmentEndPoints.get(segment) > getAlignment().getLength()-0.1) ? otherEndAngle : Double.NaN);
     }
 
     @Override

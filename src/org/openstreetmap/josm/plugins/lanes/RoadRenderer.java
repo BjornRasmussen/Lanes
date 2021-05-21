@@ -16,13 +16,14 @@ public abstract class RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
-
     protected final Way _way;
     protected final MapView _mv;
     protected final LaneMappingMode _parent;
 
+    // Asphalt outline as rendered on map.
     protected List<Way> _asphalt;
 
+    // Store "angle" of roads at endpoints.  If there isn't an obvious continuation road, these remain NaN.
     public double otherStartAngle = Double.NaN;
     public double otherEndAngle = Double.NaN;
 
@@ -41,9 +42,31 @@ public abstract class RoadRenderer {
         resetRenderingGaps();
     }
 
+    // Static constructor used by LaneMappingMode to create RoadRenderers
+    public static RoadRenderer buildRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
+        // Ensure the way is some type of road renderer.
+        if (!wayHasRoadTags(w) && !wayHasLaneTags(w)) return null;
+        if (w.getNodesCount() == 0 || !w.isVisible()) return null;
+        if (!w.isDrawable()) return null;
+
+        // Figure out type and return.
+        if (w.hasTag("lane_markings", "no") || w.hasTag("lanes", "1.5")) {
+            return new UnmarkedRoadRenderer(w, mv, parent);
+
+        } else if (wayHasLaneTags(w)) {
+            MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, parent);
+            return mrr._isValid ? mrr : new UntaggedRoadRenderer(w, mv, parent, false);
+
+        } else {
+            return new UntaggedRoadRenderer(w, mv, parent, true);
+        }
+    }
+
+
     // Renders the road on g, always called by LaneMappingMode.
     abstract void render(Graphics2D g);
     abstract void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter);
+
 
     // For getting the OSM way that the RoadRenderer is modeled after.
     public Way getWay() { return _way; }
@@ -52,33 +75,35 @@ public abstract class RoadRenderer {
     // Only different from _way when the way has different placement at start/end.
     abstract Way getAlignment();
 
+
     // Width in meters, doesn't care about placement.
     abstract double getWidth(boolean start);
 
+    // Just width/2 unless there are placement tags, in which case this method is overriden.
     public double sideWidth(boolean start, boolean left) {
         return getWidth(start)/2;
     }
 
+
+    // IntersectionRenderers add gaps where they rendered so the RoadRenderer knows not to render there.
     public synchronized void addRenderingGap(int from, int to) { addRenderingGap(Utils.nodeIdToDist(getAlignment(), from), Utils.nodeIdToDist(getAlignment(), to)); }
     public synchronized void addRenderingGap(double from, double to) {
-        double min = Math.max(Math.min(from, to), 0);
-        double max = Math.min(Math.max(from, to), getAlignment().getLength());
+        double startGap = Math.max(Math.min(from, to), 0);
+        double endGap = Math.min(Math.max(from, to), getAlignment().getLength());
         for (int i = 0; i < segmentStartPoints.size(); i++) {
-            double start = segmentStartPoints.get(i);
-            double end = segmentEndPoints.get(i);
-            if (max < end && min > start && max > start && min < end) { // completely inside
+            double startSegment = segmentStartPoints.get(i);
+            double endSegment = segmentEndPoints.get(i);
+            if (endGap < endSegment && startGap > startSegment && endGap > startSegment && startGap < endSegment) { // completely inside
                 // Add new end at min, new start at max
-                segmentEndPoints.add(i, min);
-                segmentStartPoints.add(i+1, max);
+                segmentEndPoints.add(i, startGap);
+                segmentStartPoints.add(i+1, endGap);
                 return; // To avoid problems.
-            } else if (max < end && min <= start && max > start) { // inside start half
-                // Move start to max
-                segmentStartPoints.set(i, max);
+            } else if (endGap < endSegment && startGap <= startSegment && endGap > startSegment) { // inside start half
+                segmentStartPoints.set(i, endGap);
                 return;
-            } else if (max >= end && min > start && min < end) { // inside end half
-                // Move end to min
-                segmentEndPoints.set(i, min);
-            } else if (max >= end && min <= start) { // Outside, containing this range.
+            } else if (endGap >= endSegment && startGap > startSegment && startGap < endSegment) { // inside end half
+                segmentEndPoints.set(i, startGap);
+            } else if (endGap >= endSegment && startGap <= startSegment) { // Outside, containing this range.
                 // Remove this range.
                 segmentEndPoints.remove(i);
                 segmentStartPoints.remove(i);
@@ -86,7 +111,14 @@ public abstract class RoadRenderer {
             }
         }
         _asphalt = null;
-    }
+
+        // Find any segments that are less than 0.1 meters long, and clean them up.
+        for (int i = segmentStartPoints.size()-1; i > 0; i--) {
+            if (segmentEndPoints.get(i) - segmentStartPoints.get(i) < 0.1) {
+                segmentStartPoints.remove(i);
+                segmentEndPoints.remove(i);
+            }
+        }    }
 
     public void resetRenderingGaps() {
         segmentStartPoints = new ArrayList<>();
@@ -96,7 +128,7 @@ public abstract class RoadRenderer {
         _asphalt = null;
     }
 
-    // For getting alignment split up by road segment.
+    // For getting alignment split up by road segment (alignment minus the gaps).
     public List<Way> getAlignments() {
         // Returns sub parts of alignment.
         List<Way> output = new ArrayList<>();
@@ -114,32 +146,8 @@ public abstract class RoadRenderer {
     }
 
     // Get edge methods.  Return edge of rendering, aka like 0.3 meters more than actual edge.
-    public Way getLeftEdge() { return getLeftEdge(null, 0); }
-    public Way getRightEdge() { return getRightEdge(null, 0); }
-    abstract Way getLeftEdge(Way waySegment, int segment);
-    abstract Way getRightEdge(Way waySegment, int segment);
-
-    // Static constructor used by LaneMappingMode to create
-    //  RoadRenderers without having to worry about which kind is created.
-    public static RoadRenderer buildRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
-        if (!wayHasRoadTags(w) && !wayHasLaneTags(w)) return null;
-        if (w.getNodesCount() == 0 || !w.isVisible()) return null;
-        if (!w.isDrawable()) return null;
-
-        if (w.hasTag("lane_markings", "no") || w.hasTag("lanes", "1.5")) {
-            return new UnmarkedRoadRenderer(w, mv, parent);
-        } else if (wayHasLaneTags(w)) {
-            MarkedRoadRenderer mrr = new MarkedRoadRenderer(w, mv, parent);
-            if (mrr._isValid) {
-                return mrr;
-            } else {
-                return new UntaggedRoadRenderer(w, mv, parent, false);
-            }
-        } else {
-            return new UntaggedRoadRenderer(w, mv, parent, true);
-        }
-    }
-
+    abstract Way getEdge(int segment /* -1 for every segment, else specific iD for segment */, boolean right);
+    
     // <editor-fold defaultstate=collapsed desc="Methods for Angles and Alignments">
 
     public void updateAlignment() {
@@ -273,19 +281,14 @@ public abstract class RoadRenderer {
 
     public List<Way> getAsphaltOutlineCoords() {
         List<Way> output = new ArrayList<>();
-        List<Way> alignments = getAlignments();
-        for (int i = 0; i < alignments.size(); i++) {
-            Way alignmentPart = alignments.get(i);
-
-            Way left = getLeftEdge(alignmentPart, i);
-            Way right = getRightEdge(alignmentPart, i);
+        for (int i = 0; i < getAlignments().size(); i++) {
+            Way left = getEdge(i, false);
+            Way right = getEdge(i, true);
 
             List<Node> points = new ArrayList<>();
 
             for (int j = 0; j < left.getNodesCount(); j++) points.add(left.getNode(j));
-
             for (int j = 0; j < right.getNodesCount(); j++) points.add(right.getNode(right.getNodesCount()-j-1));
-
             points.add(left.getNode(0));
 
             Way thisSegment = new Way();
@@ -327,27 +330,17 @@ public abstract class RoadRenderer {
     // </editor-fold>
 
     private static boolean wayHasLaneTags(Way way) {
-        return (!way.hasAreaTags() &&
-                (way.hasTag("lanes") || way.hasTag("lanes:forward") || way.hasTag("lanes:backward") ||
-                way.hasTag("turn:lanes") || way.hasTag("turn:lanes:forward") || way.hasTag("turnlanes:backward") ||
-                way.hasTag("change:lanes") || way.hasTag("change:lanes:forward") || way.hasTag("change:lanes:backward") ||
-                way.hasTag("bicycle:lanes") || way.hasTag("bicycle:lanes:forward") || way.hasTag("bicycle:lanes:backward") ||
-                way.hasTag("width:lanes") || way.hasTag("width:lanes:forward") || way.hasTag("width:lanes:backward") ||
-                way.hasTag("access:lanes") || way.hasTag("access:lanes:forward") || way.hasTag("access:lanes:backward") ||
-                way.hasTag("psv:lanes") || way.hasTag("psv:lanes:forward") || way.hasTag("psv:lanes:backward") ||
-                way.hasTag("surface:lanes") || way.hasTag("surface:lanes:forward") || way.hasTag("surface:lanes:backward") ||
-                way.hasTag("bus:lanes") || way.hasTag("bus:lanes:forward") || way.hasTag("bus:lanes:backward")) ||
-                way.hasTag("lane_markings", "no") || way.hasTag("in_a_junction"));
+        return !way.hasAreaTags() && Utils.wayHasOneOfKeys(way, "lanes", "lanes:forward", "lanes:backward",
+                "turn:lanes", "turn:lanes:forward", "turn:lanes:backward", "change:lanes", "change:lanes:forward", "change:lanes:backward",
+                "bicycle:lanes", "bicycle:lanes:forward", "bicycle:lanes:backward", "width:lanes", "width:lanes:forward", "width:lanes:backward",
+                "access:lanes", "access:lanes:forward", "access:lanes:backward", "psv:lanes", "psv:lanes:forward", "psv:lanes:backward",
+                "surface:lanes", "surface:lanes:forward", "surface:lanes:backward", "bus:lanes", "bus:lanes:forward", "bus:lanes:backward",
+                "lane_markings", "in_a_junction");
     }
 
     private static boolean wayHasRoadTags(Way way) {
-        return (!way.hasAreaTags() &&
-                (way.hasTag("highway", "motorway") || way.hasTag("highway", "motorway_link") ||
-                        way.hasTag("highway", "trunk") || way.hasTag("highway", "trunk_link") ||
-                        way.hasTag("highway", "primary") || way.hasTag("highway", "primary_link") ||
-                        way.hasTag("highway", "secondary") || way.hasTag("highway", "secondary_link") ||
-                        way.hasTag("highway", "tertiary") || way.hasTag("highway", "tertiary_link") ||
-                        way.hasTag("highway", "residential") || way.hasTag("highway", "unclassified") ||
-                        way.hasTag("highway", "bus_guideway") || way.hasTag("highway", "living_street")));
+        return (!way.hasAreaTags() && Utils.wayHasTags(way, "highway", "motorway", "motorway_link",
+                "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link",
+                "residential", "unclassified", "bus_guideway", "living_street", "busway"));
     }
 }

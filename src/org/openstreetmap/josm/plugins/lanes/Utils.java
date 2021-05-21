@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Utils {
 
@@ -659,6 +660,20 @@ public class Utils {
             distSoFar += w.getNode(i).getCoor().greatCircleDistance(w.getNode(i+1).getCoor());
         }
         return distSoFar;
+    }
+
+    public static boolean wayHasOneOfKeys(Way w, String... keys) {
+        Map<String, String> tags = w.getInterestingTags();
+        Iterator<String> iterator = Arrays.stream(keys).iterator();
+        while (iterator.hasNext()) if (tags.containsKey(iterator.next())) return true;
+        return false;
+    }
+
+    public static boolean wayHasTags(Way w, String key, String... values) {
+        if (!w.hasTag(key)) return false;
+        Iterator<String> iterator = Arrays.stream(values).iterator();
+        while (iterator.hasNext()) if (w.hasTag(key, iterator.next())) return true;
+        return false;
     }
 
     // </editor-fold>

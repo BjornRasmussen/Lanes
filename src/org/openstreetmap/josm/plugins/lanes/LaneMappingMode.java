@@ -47,7 +47,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
     public Map<Long, IntersectionRenderer> nodeIdToISR = new HashMap<>();
 
     // MapView, used for finding the connection between pixels on the screen and coordinates on earth.
-    private MapView _mv;
+    public MapView _mv;
 
     // Listener lists
     private List<ChangeListener> _modeExited; // For closing pop-ups when Lane editing mode is left.
@@ -76,12 +76,8 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
     public void enterMode() {
         super.enterMode();
 
-        // Ensure edit dataset isn't null.
-        if (getLayerManager().getEditDataSet() == null) exitMode();
-
-        // Generate all roads and intersections.
+        // Force regeneration of all roads and intersections.
         _roads = null;
-        ensureRoadSegmentsNotNull();
 
         // Adding this as a temporary layer is what makes drawing on top of everything else possible.
         MainApplication.getMap().mapView.addTemporaryLayer(this);
@@ -219,12 +215,13 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         // Don't render when the map is too zoomed out or when mv is null.
         if (mv == null || mv.getScale() > 16) return;
 
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        double cushion = _roads.size() > 100 ? 300 : 10000; // Distance in meters around edge of screen where renderer looks for roads to render.
         _mv = mv;
 
         // Get map data for rendering:
         ensureRoadSegmentsNotNull();
+
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        double cushion = _roads.size() > 100 ? 300 : 10000; // Distance in meters around edge of screen where renderer looks for roads to render.
 
         // Get bounds where rendering should happen
         ProjectionBounds bounds = mv.getProjectionBounds();
@@ -245,13 +242,14 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         // Render each road
         for (RoadRenderer r : _roads) {
             if (wayShouldBeRendered(bounds, r.getWay())) {
-                try {
+//                try {
                     r.render(g);
-                } catch (Exception ignored) {}
+//                } catch (Exception ignored) {}
             }
         }
     }
 
+    // <editor-fold defaultstate="collapsed" desc="Methods for adding listeners">
 
     /**
      * Popups can add listeners here so they close when the user leaves the mode.
@@ -277,12 +275,10 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         _dataChanged.remove(a);
     }
 
+    // </editor-fold>
 
     // <editor-fold defaultstate="collapsed" desc="Methods for Building RoadSegmentRenderers">
 
-    /**
-     * Builds the RoadRenderers / IntersectionRenderers if they are currently null.
-     */
     private void ensureRoadSegmentsNotNull() {
         if (_roads == null || _intersections == null) {
             _roads = getAllRoadRenderers(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
@@ -297,7 +293,6 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
      * @return The list of created RoadRenderers.
      */
     private List<RoadRenderer> getAllRoadRenderers(List<Way> ways, MapView mv) {
-//        _ways = ways;
         wayIdToRSR = new Hashtable<>();
         List<RoadRenderer> output = new Vector<>();
 
@@ -336,7 +331,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
     }
 
     /**
-     * Generates a list of InterSectionRenderers based on the list of
+     * Generates a list of InterSectionRenderers based on the list of RoadRenderers already created.
      * @param mv The MapView each IntersectionRenderer should use.
      * @return The created list of IntersectionRenderers.
      */

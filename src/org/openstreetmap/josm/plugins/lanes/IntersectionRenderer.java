@@ -91,7 +91,7 @@ public abstract class IntersectionRenderer {
             // Get way at i right road edge (right going out from intersection, left going in)
             WayVector ith = _wayVectors.get(i);
             RoadRenderer ithrr = _m.wayIdToRSR.get(ith.getParent().getUniqueId());
-            Way rightSubPart = Utils.getSubPart(ith.isForward() ? ithrr.getRightEdge() : ithrr.getLeftEdge(),
+            Way rightSubPart = Utils.getSubPart(ith.isForward() ? ithrr.getEdge(-1, true) : ithrr.getEdge(-1, false),
                     ith.isForward() ? Math.min(ith.getFrom(), ith.getTo()) : 0,
                     ith.isForward() ? ithrr.getWay().getNodesCount()-1 : Math.max(ith.getFrom(), ith.getTo()));
             Way rightEdge = (ith.isForward() ? rightSubPart : Utils.reverseNodes(rightSubPart));
@@ -100,7 +100,7 @@ public abstract class IntersectionRenderer {
             // Get way at i+1 left road edge (left going out from intersection, right going in)
             WayVector ipoth = _wayVectors.get((i == _wayVectors.size() - 1) ? 0 : i + 1);
             RoadRenderer ipothrr = _m.wayIdToRSR.get(ipoth.getParent().getUniqueId());
-            Way leftSubPart = Utils.getSubPart(ipoth.isForward() ? ipothrr.getLeftEdge() : ipothrr.getRightEdge(),
+            Way leftSubPart = Utils.getSubPart(ipoth.isForward() ? ipothrr.getEdge(-1, false) : ipothrr.getEdge(-1, true),
                     ipoth.isForward() ? Math.min(ipoth.getFrom(), ipoth.getTo()) : 0,
                     ipoth.isForward() ? ipothrr.getWay().getNodesCount()-1 : Math.max(ipoth.getFrom(), ipoth.getTo()));
             Way leftEdge = (ipoth.isForward() ? leftSubPart : Utils.reverseNodes(leftSubPart));
@@ -201,7 +201,6 @@ public abstract class IntersectionRenderer {
                 distances[0] = distIntersection + (_wayVectors.get(i).isForward() ? 1 : -1)*distIntoAlignment;
                 if (distances[0] < 0) distances[0] = 0;
                 if (distances[0] > alignment.getLength()) distances[0] = alignment.getLength();
-                l = Utils.getParallelPoint(alignment, distances[0], 0);
             }
             // Replace final nodes of the setBacks with properly parallel nodes and add gap to RoadRenderer
             // Get a "better" crossSection, which is always perpendicular to the way.
@@ -267,6 +266,8 @@ public abstract class IntersectionRenderer {
             // Stop the RoadRenderer from rendering at the intersection.
             double distCenter = _wayVectors.get(i).getFrom() == 0 ? 0.0 : Utils.getSubPart(rr.getAlignment(), 0, _wayVectors.get(i).getFrom()).getLength();
             if (_trimWays) rr.addRenderingGap(distCenter, distances[0]);
+//            new Thread(() -> JOptionPane.showMessageDialog(MainApplication.getMainFrame(),
+//                    "added gap, from " + distCenter + " to " + distances[0] + " on len " + rr.getAlignment().getLength())).start();
             _setBacks.add(leftSideSetBack);
             _setBacks.add(rightSideSetBack);
         }
@@ -445,7 +446,7 @@ public abstract class IntersectionRenderer {
             for (int k = 0; k < igs.wayVectors().size(); k++) { // This runs for each wayVector in the graphSegment (runs just one time 99% of the time)
                 WayVector wv = igs.wayVectors().get(k);
                 RoadRenderer parallelRR = _m.wayIdToRSR.get(wv.getParent().getUniqueId());
-                Way parallel = wv.isForward() ? parallelRR.getLeftEdge() : parallelRR.getRightEdge();
+                Way parallel = wv.isForward() ? parallelRR.getEdge(-1, false) : parallelRR.getEdge(-1, true);
                 List<Node> parallelSubPart = new ArrayList<>();
 //                for (int l = wv.getFrom(); wv.isForward() ? (l <= wv.getTo()) : (l >= wv.getTo()); l += (wv.isForward()?1:-1)) { // Runs for each node in the wayVector(1-2 times 95% of the time)
 //                    if (l == wv.getFrom() && j != 0) continue;

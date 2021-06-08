@@ -32,8 +32,14 @@ public class Lane extends RoadPiece {
     public double getWidth(boolean start) {
         String widthTag = getWidthTag(start);
         double width = -1;
+        double lanes = 1;
 
         if (widthTag != null && widthTag.equals("")) widthTag = null;
+
+        if (widthTag != null && widthTag.endsWith(" total")) {
+            widthTag = widthTag.substring(0, widthTag.length() - 6);
+            lanes = _parent._forwardLanes.size() + _parent._backwardLanes.size();
+        }
 
         try {
             width = Utils.parseWidth(widthTag);
@@ -49,7 +55,7 @@ public class Lane extends RoadPiece {
             }
         }
 
-        return width + (_direction == 0 ? 1 : -1) * Utils.RENDERING_WIDTH_DIVIDER;
+        return width / lanes + (_direction == 0 ? 1 : -1) * Utils.RENDERING_WIDTH_DIVIDER;
     }
 
     @Override
@@ -210,6 +216,17 @@ public class Lane extends RoadPiece {
                 output = splitPos(_way.get("width:lanes:both_ways"), _position);
             }
         }
+
+        if (output.equals("")) {
+            if (start && _way.hasTag("width:start")) {
+                output = _way.get("width:start") + " total";
+            } else if (_way.hasTag("width:end")) {
+                output = _way.get("width:end") + " total";
+            } else if (_way.hasTag("width")) {
+                output = _way.get("width") + " total";
+            }
+        }
+
         return output.equals("") ? null : output;
     }
 

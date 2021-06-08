@@ -1067,9 +1067,11 @@ public class Utils {
             }
             output.put("lane_markings", "no");
         } else {
-            if (p.getLanesBackward() != 0 || p.getLanesBothWays() != 0 || p.getLanesForward() != 1) output.put("lane_markings", "yes");
             output.put("width", "");
             output.put("narrow", "");
+            if ((p.getLanesBackward() != 0 || p.getLanesBothWays() != 0 || p.getLanesForward() != 1) && !w.hasTag("lane_markings", "yes"))  {
+                output.put("lane_markings", "");
+            }
             output.putAll(setLanesInDirection(w, 1, p.getLanesForward()));
             output.putAll(setLanesInDirection(w, 0, p.getLanesBothWays() > 0.1 ? 1 : 0));
             output.putAll(setLanesInDirection(w, -1, p.getLanesBackward()));

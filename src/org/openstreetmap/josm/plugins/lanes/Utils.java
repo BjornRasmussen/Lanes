@@ -1067,11 +1067,13 @@ public class Utils {
             }
             output.put("lane_markings", "no");
         } else {
-            output.put("width", "");
-            output.put("narrow", "");
             if ((p.getLanesBackward() != 0 || p.getLanesBothWays() != 0 || p.getLanesForward() != 1) && !w.hasTag("lane_markings", "yes"))  {
                 output.put("lane_markings", "");
             }
+            // TODO: should the original values for the "width" and "narrow" tags be restored?
+            // In general, clicking "1 lane" shouldn't change these tags, but what if they were set by an "unmarked" preset above?
+            // undoPrevFirst will revert it if the popup hasn't been closed, but if it has been closed, it might be nice to restore
+            // any values that we didn't set.
             output.putAll(setLanesInDirection(w, 1, p.getLanesForward()));
             output.putAll(setLanesInDirection(w, 0, p.getLanesBothWays() > 0.1 ? 1 : 0));
             output.putAll(setLanesInDirection(w, -1, p.getLanesBackward()));

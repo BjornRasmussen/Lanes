@@ -30,9 +30,10 @@ public class UnmarkedRoadRenderer extends RoadRenderer {
     private void renderRoadEdges(Graphics2D g) {
         Color left = Utils.isRightHand(getWay()) && Utils.isOneway(getWay()) ? Utils.DEFAULT_CENTRE_DIVIDER_COLOR : Utils.DEFAULT_DIVIDER_COLOR;
         Color right = !Utils.isRightHand(getWay()) && Utils.isOneway(getWay()) ? Utils.DEFAULT_CENTRE_DIVIDER_COLOR : Utils.DEFAULT_DIVIDER_COLOR;
-        double hw = (getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER)/2;
-        Utils.renderRoadLine(g, _mv, this, 0, 0, hw, hw, Utils.DividerType.UNMARKED_ROAD_EDGE, left);
-        Utils.renderRoadLine(g, _mv, this, 0, 0, -hw, -hw, Utils.DividerType.UNMARKED_ROAD_EDGE, right);
+        double hws = (getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER)/2;
+        double hwe = (getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER)/2;
+        Utils.renderRoadLine(g, _mv, this, 0, 0, hws, hwe, Utils.DividerType.UNMARKED_ROAD_EDGE, left);
+        Utils.renderRoadLine(g, _mv, this, 0, 0, -hws, -hwe, Utils.DividerType.UNMARKED_ROAD_EDGE, right);
     }
 
     @Override

@@ -6,10 +6,12 @@ import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
+import org.openstreetmap.josm.tools.Pair;
 
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public abstract class IntersectionRenderer {
@@ -28,6 +30,9 @@ public abstract class IntersectionRenderer {
     protected List<Way> _rightBackbones;
     protected List<Way> _leftBackbones;
     protected List<Way> _crossSections;
+    protected List<Way> _betterCrossSections;
+    protected List<Way> _connectionWays;
+    protected List<MarkedRoadRenderer> _connectionRoads;
 
     protected List<WayVector> _toBeTrimmed;
     protected boolean _trimWays;
@@ -63,6 +68,10 @@ public abstract class IntersectionRenderer {
         _leftBackbones = new ArrayList<>();
         _rightBackbones = new ArrayList<>();
         _crossSections = new ArrayList<>();
+        _betterCrossSections = new ArrayList<>();
+        _connectionWays = new ArrayList<>();
+        _connectionRoads = new ArrayList<>();
+        ArrayList<Pair<Double, Double>> setbackRanges = new ArrayList<>();
 
         _rightPoints = new ArrayList<>();
         _leftPoints = new ArrayList<>();
@@ -175,6 +184,7 @@ public abstract class IntersectionRenderer {
             crossSectionNodes.add(rightSideSetBack.getNode(rightSideSetBack.getNodesCount()-1));
             crossSectionNodes.add(leftSideSetBack.getNode(leftSideSetBack.getNodesCount()-1));
             crossSection.setNodes(crossSectionNodes);
+            _crossSections.add(crossSection);
 
             // Find intersect between the cross section and the alignment to find out how far into the alignment the cross sections go.
             double[] distances = new double[2];
@@ -198,6 +208,12 @@ public abstract class IntersectionRenderer {
                 if (distances[0] > alignment.getLength()) distances[0] = alignment.getLength();
                 l = Utils.getParallelPoint(alignment, distances[0], 0);
             }
+
+            // Store the setback range.
+            double dist = distances[0] + (_wayVectors.get(i).isForward() ? -1 : 1) * (rightSideSetBack.getLength()+leftSideSetBack.getLength())/2;
+            if (dist < 0) dist = 0;
+            setbackRanges.add(new Pair<>(distances[0], dist));
+
             // Replace final nodes of the setBacks with properly parallel nodes and add gap to RoadRenderer
             // Get a "better" crossSection, which is always perpendicular to the way.
             double percent = distances[0] / alignment.getLength();
@@ -213,6 +229,7 @@ public abstract class IntersectionRenderer {
             betterCSNodes.add(new Node(right));
 
             betterCrossSection.setNodes(betterCSNodes);
+            _betterCrossSections.add(betterCrossSection);
 
             // Trim backbones to where they intersect the improved cross section.
             Way rightBackbone = _rightBackbones.get(i);
@@ -265,6 +282,54 @@ public abstract class IntersectionRenderer {
             _setBacks.add(leftSideSetBack);
             _setBacks.add(rightSideSetBack);
         }
+
+        // Create ways for each lane connectivity through the "intersection".
+        RightOfWay row = getRightOfWay();
+        if (row != null) {
+            try {
+                Way mainSetback = null;
+                for (int i = 0; i < _wayVectors.size(); i++) {
+                    if (row.mainRoad.getParent().getUniqueId() == _wayVectors.get(i).getParent().getUniqueId()) {
+                        double a = setbackRanges.get(i).a;
+                        double b = setbackRanges.get(i).b;
+                        if (a < b) {
+                            mainSetback = Utils.getSubPart(_wayVectors.get(i).getParent(), a, b);
+                        } else {
+                            mainSetback = Utils.getSubPart(_wayVectors.get(i).getParent(), b, a);
+                        }
+                    }
+                }
+
+                if (mainSetback != null) {
+                    // Connect each other road up to the main road through their setbacks.
+                    for (int i = 0; i < _wayVectors.size(); i++) {
+                        if (row.mainRoad.equals(_wayVectors.get(i))) continue;
+                        Pair<LaneRef, LaneRef> lanes = row.getWayConnection(_wayVectors.get(i));
+                        if (lanes != null) {
+                            Way connectedSetback = Utils.getSubPart(_wayVectors.get(i).getParent(), setbackRanges.get(i).a, setbackRanges.get(i).b);
+                            // TODO why does getSubPart give nodes off the way sometimes?
+                            double offset = row.getPlacementOffset(_wayVectors.get(i), _m);
+                            Way mainOffsetSetback = Utils.getParallel(mainSetback, offset, offset, false, Double.NaN, Double.NaN);
+                            // TODO if connectedSetback turns away from mainSetback (so that it makes a kink) use a straight
+                            // line extension of connectedSetback instead (of the same distance)
+                            List<Node> nodes = connectedSetback.getNodes();
+                            List<Node> mainNodes = mainOffsetSetback.getNodes();
+                            if (row.mainRoad.isForward()) Collections.reverse(mainNodes);
+                            nodes.addAll(mainNodes);
+                            Way connectionWay = new Way(_wayVectors.get(i).getParent(), true, false);
+                            if (_wayVectors.get(i).isForward()) Collections.reverse(nodes);
+                            connectionWay.setNodes(nodes);
+                            _connectionWays.add(connectionWay);
+                            _connectionRoads.add(new MarkedRoadRenderer(connectionWay, _mv, _m));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                _connectionWays = null;
+                _connectionRoads = null;
+            }
+        }
+
 
         // Revisit every corner and add its bezier curve to the outline.
         List<Node> outlineNodes = new ArrayList<>();
@@ -354,37 +419,45 @@ public abstract class IntersectionRenderer {
 
     public void render(Graphics2D g) {
         try {
-            // Fill in asphalt.
-            int[] xPoints = new int[_outline.getNodesCount()];
-            int[] yPoints = new int[_outline.getNodesCount()];
-            for (int i = 0; i < _outline.getNodesCount(); i++) {
-                xPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getX() + 0.5);
-                yPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getY() + 0.5);
-            }
-            g.setColor(Utils.DEFAULT_ASPHALT_COLOR);
-            g.fillPolygon(xPoints, yPoints, xPoints.length);
-
-            // Draw road lines:
-            double pixelsPerMeter = 100 / _mv.getDist100Pixel();
-            for (Way w : _roadMarkings) {
-                if (w == null) continue;
-                // To reduce jitter, ensure no more than one vertex per 10 pixels or so. TODO use better simplification
-                int everyNth = Math.max((int) (w.getNodesCount() / (Math.max(w.getLength() * pixelsPerMeter / 7, 10)) + 1.5), 1);
-                xPoints = new int[w.getNodesCount()];
-                yPoints = new int[w.getNodesCount()];
-                int num = 0;
-                int topLefts = 0;
-                for (int i = 0; i < w.getNodesCount(); i++) {
-                    if (i % everyNth != 0 && i != w.getNodesCount() - 1) continue;
-                    xPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getX() + 0.5);
-                    yPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getY() + 0.5);
-                    if (xPoints[num] == 0 && yPoints[num] == 0) topLefts++;
-                    num++;
+            if (_connectionRoads != null && _connectionRoads.size() > 0) {
+                for (MarkedRoadRenderer r : _connectionRoads) {
+                   r.render(g);
                 }
-                g.setColor(Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR);
-                g.setStroke(GuiHelper.getCustomizedStroke((12.5 / _mv.getDist100Pixel() + 1) + ""));
-                if (topLefts < 2)
-                    g.drawPolyline(xPoints, yPoints, num); // Render road line unless it would shoot to the top left point of the screen.
+            }
+            else {
+
+                // Fill in asphalt.
+                int[] xPoints = new int[_outline.getNodesCount()];
+                int[] yPoints = new int[_outline.getNodesCount()];
+                for (int i = 0; i < _outline.getNodesCount(); i++) {
+                    xPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getX() + 0.5);
+                    yPoints[i] = (int) (_mv.getPoint(_outline.getNode(i).getCoor()).getY() + 0.5);
+                }
+                g.setColor(Utils.DEFAULT_ASPHALT_COLOR);
+                g.fillPolygon(xPoints, yPoints, xPoints.length);
+
+                // Draw road lines:
+                double pixelsPerMeter = 100 / _mv.getDist100Pixel();
+                for (Way w : _roadMarkings) {
+                    if (w == null) continue;
+                    // To reduce jitter, ensure no more than one vertex per 10 pixels or so. TODO use better simplification
+                    int everyNth = Math.max((int) (w.getNodesCount() / (Math.max(w.getLength() * pixelsPerMeter / 7, 10)) + 1.5), 1);
+                    xPoints = new int[w.getNodesCount()];
+                    yPoints = new int[w.getNodesCount()];
+                    int num = 0;
+                    int topLefts = 0;
+                    for (int i = 0; i < w.getNodesCount(); i++) {
+                        if (i % everyNth != 0 && i != w.getNodesCount() - 1) continue;
+                        xPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getX() + 0.5);
+                        yPoints[num] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getY() + 0.5);
+                        if (xPoints[num] == 0 && yPoints[num] == 0) topLefts++;
+                        num++;
+                    }
+                    g.setColor(Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR);
+                    g.setStroke(GuiHelper.getCustomizedStroke((12.5 / _mv.getDist100Pixel() + 1) + ""));
+                    if (topLefts < 2)
+                        g.drawPolyline(xPoints, yPoints, num); // Render road line unless it would shoot to the top left point of the screen.
+                }
             }
 
             g.setStroke(new BasicStroke(10));
@@ -405,13 +478,22 @@ public abstract class IntersectionRenderer {
 //            g.drawPolyline(xPoints2, yPoints2, xPoints2.length);
 //        }
 
-        g.setStroke(new BasicStroke(10));
-        g.setColor(Color.RED);
-        for (int i = 0; i < _bruh.size(); i++) {
-            int x = (int) (_mv.getPoint(_bruh.get(i)).getX() + 0.5);
-            int y = (int) (_mv.getPoint(_bruh.get(i)).getY() + 0.5);
-            g.drawLine(x, y, x, y);
-        }
+
+            // DRAW CONNECTIVITY
+            if (_connectionWays != null) {
+                debugDrawWays(g, _connectionWays, Color.GREEN);
+            }
+
+            debugDrawPoints(g, _bruh, Color.RED);
+
+//            debugDrawPoints(g, _leftPoints, Color.PINK);
+//            debugDrawPoints(g, _rightPoints, Color.ORANGE);
+
+//            debugDrawPoints(g, _intersects, Color.BLACK);
+
+//            debugDrawWays(g, _setBacks, Color.YELLOW);
+//            debugDrawWays(g, _crossSections, Color.CYAN);
+//            debugDrawWays(g, _betterCrossSections, Color.BLUE);
 
 //            if (_ordering != null) {
 //                g.setColor(Color.RED);
@@ -434,6 +516,33 @@ public abstract class IntersectionRenderer {
             g.setStroke(GuiHelper.getCustomizedStroke("0"));
         } catch (Exception ignored) {}
     }
+
+    private void debugDrawPoints(Graphics2D g, List<LatLon> points, Color c) {
+        g.setStroke(new BasicStroke(10));
+        g.setColor(c);
+        for (int i = 0; i < points.size(); i++) {
+            int x = (int) (_mv.getPoint(points.get(i)).getX() + 0.5);
+            int y = (int) (_mv.getPoint(points.get(i)).getY() + 0.5);
+            g.drawLine(x, y, x, y);
+        }
+    }
+
+    private void debugDrawWays(Graphics2D g, List<Way> ways, Color c) {
+        g.setColor(c);
+        for (Way w : ways) {
+            g.setStroke(new BasicStroke(4, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            int[] xPoints = new int[w.getNodesCount()];
+            int[] yPoints = new int[w.getNodesCount()];
+            for (int i = 0; i < w.getNodesCount(); i++) {
+                xPoints[i] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getX() + 0.5);
+                yPoints[i] = (int) (_mv.getPoint(w.getNode(i).getCoor()).getY() + 0.5);
+                g.drawLine(xPoints[i], yPoints[i], xPoints[i], yPoints[i]);
+            }
+            g.setStroke(new BasicStroke(2));
+            g.drawPolyline(xPoints, yPoints, w.getNodesCount());
+        }
+    }
+
 
     public void updateAlignment() {
         // One of the child way's tags was just changed.  Update shape:

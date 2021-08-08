@@ -11,6 +11,7 @@ import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.util.GuiHelper;
+import org.openstreetmap.josm.tools.Pair;
 
 import javax.swing.*;
 import java.awt.*;
@@ -224,6 +225,11 @@ public class MarkedRoadRenderer extends RoadRenderer {
         return numLanes;
     }
 
+    public int getLaneCount(int direction) {
+        if (direction > 0) return _forwardLanes.size();
+        if (direction < 0) return _backwardLanes.size();
+        return _bothWaysLane instanceof Lane ? 1 : 0;
+    }
 
     private void getPlacementInformation() {
         _offsetToLeftStart = getPlacementAt(true, false);
@@ -529,6 +535,27 @@ public class MarkedRoadRenderer extends RoadRenderer {
         return Utils.getParallel(alignmentPart != null ? alignmentPart : _alignment, startOffset, endOffset, false,
                 (startPoints.get(segment) < 0.1 || alignmentPart == null) ? otherStartAngle : Double.NaN,
                 (endPoints.get(segment) > getAlignment().getLength()-0.1 || alignmentPart == null) ? otherEndAngle : Double.NaN);
+    }
+
+    public Pair<Integer, Integer> calculateLaneNumber(int directedLane, boolean isForward) {
+        if (directedLane == 0) return new Pair<>(1, 0);
+        int wayDir = isForward ? 1 : -1;
+        Pair<Integer, Integer> output = new Pair<>(Math.abs(directedLane), wayDir * Integer.signum(directedLane));
+
+        if (!Utils.isRightHand(_way)) {
+            // OSM "left-to-right" lane numbering is outside-in on left hand drive roads.
+            output.a = getLaneCount(output.b) - output.a + 1;
+        }
+        return output;
+    }
+
+    public int calculateDirectedLane(int laneNumber, boolean isForward) {
+        int dir = isForward ? 1 : -1;
+        if (!Utils.isRightHand(_way)) {
+            // OSM "left-to-right" lane numbering is outside-in on left hand drive roads.
+            laneNumber = getLaneCount(dir) - laneNumber + 1;
+        }
+        return laneNumber * dir;
     }
 
     // </editor-fold>

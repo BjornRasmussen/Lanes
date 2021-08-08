@@ -470,6 +470,8 @@ public abstract class IntersectionRenderer {
 
     abstract LatLon getPos();
 
+    abstract RightOfWay getRightOfWay();
+
     public Way glue(Way a, Way b, double extension) {
         // Glue first half of a to second half of b.  Split into halves at intersect.
         double[] distances = new double[2];

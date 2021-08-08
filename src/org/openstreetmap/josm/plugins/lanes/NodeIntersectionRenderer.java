@@ -23,6 +23,7 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
     // <editor-fold defaultstate="collapsed" desc="Variables"
 
     private Node _node;
+    private RightOfWay _rightOfWay;
 
     // </editor-fold>
 
@@ -32,6 +33,7 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
         super(mv, m);
         _node = n;
         _trimWays = false; // Only multi intersections do this.
+        _rightOfWay = RightOfWay.create(n, m);
         createIntersectionLayout();
     }
 
@@ -52,6 +54,11 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
     @Override
     public LatLon getPos() {
         return _node.getCoor();
+    }
+
+    @Override
+    public RightOfWay getRightOfWay() {
+        return _rightOfWay;
     }
 
     public Way getOutline() {

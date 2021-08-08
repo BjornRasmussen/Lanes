@@ -68,6 +68,42 @@ class RightOfWay {
     }
 
     /**
+     * Calculates the placement offset distance for the end of a road connecting to the main road.
+     * This is how far the node would want to move to be correctly positioned for this way (given its placement), based
+     * on its connectivity to the main road, and the placement of the main road.
+     *
+     * When a road splits with its lanes diverging, the intersection node may lay outside of the road area for some of
+     * the connected ways. For this reason, we calculate this offset based on the placement and widths of the main road.
+     */
+    public double getPlacementOffset(WayVector connectedWayVector, LaneMappingMode _m) {
+        try {
+            MarkedRoadRenderer connectedRoad = (MarkedRoadRenderer) _m.wayIdToRSR.get(connectedWayVector.getParent().getUniqueId());
+            String placement = connectedRoad.getPlacementTag(connectedWayVector.getFrom() == 0);
+            if (placement == null) {
+                // TODO fix for right hand drive ways
+                int lanes = connectedRoad.getLaneCount(1);
+                placement = (lanes % 2 == 1) ? "middle_of:" + (lanes / 2 + 1) + "f" : "right_of:" + (lanes / 2) + "f";
+                // FIXME placement is actually in the center of the road, (which is not here if the lane widths differ).
+            }
+            String[] placementBits = placement.substring(0, placement.length() - 1).split(":");
+            int directedPlacementLane = connectedRoad.calculateDirectedLane(
+                    Integer.parseInt(placementBits[1]),
+                    placement.charAt(placement.length() - 1) == 'f');
+            LaneRef placementLane = new LaneRef(connectedWayVector, directedPlacementLane * (connectedWayVector.isForward() ? 1 : -1));
+            LaneRef mainLane = getConnection(placementLane);
+
+            MarkedRoadRenderer mainRoad = (MarkedRoadRenderer) _m.wayIdToRSR.get(mainLane.wayVec.getParent().getUniqueId());
+            String placementOnMainRoad = placementBits[0] + ":" +
+                    mainRoad.calculateLaneNumber(mainLane.directedLane, mainLane.wayVec.isForward()).a +
+                    (!mainLane.wayVec.isForward() ^ mainLane.directedLane < 0 ? "b" : "f");
+
+            return mainRoad.getPlacementOffsetFrom(placementOnMainRoad, mainLane.wayVec.getTo());
+        } catch (Exception ignored) {}
+
+        return 0;
+    }
+
+    /**
      * Calculate right of way for a single node intersection.
      *
      * Currently only supports points where the number of lanes remains the same but they diverge on one side.th

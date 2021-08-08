@@ -242,28 +242,35 @@ public class MarkedRoadRenderer extends RoadRenderer {
         _offsetToLeftEnd -= placementDiff;
     }
 
+
     private double getPlacementAt(boolean start, boolean ignoreWidthTags) {
+        return getPlacementDistance(start, getPlacementTag(start), ignoreWidthTags);
+    }
+
+    /** Calculates the offset from this road's way to the position specified by otherPlacement. */
+    public double getPlacementOffsetFrom(String otherPlacement, int node) {
+        boolean start = node == 0; // TODO support nodes in the middle of the way.
+        return getPlacementAt(start, false) - getPlacementDistance(start, otherPlacement, false);
+    }
+
+    private double getPlacementDistance(boolean start, String placement, boolean ignoreWidthTags) {
         try {
-            // Get string representation of placement.
-            String placement = getPlacementTag(start);
-            int direction = placement.charAt(placement.length()-1) == 'f' ? 1 : placement.charAt(placement.length()-1) == 'b' ? -1 : 0;
-            placement = placement.substring(0, placement.length()-1);
+            int direction = placement.charAt(placement.length() - 1) == 'f' ? 1 : placement.charAt(placement.length() - 1) == 'b' ? -1 : 0;
+            placement = placement.substring(0, placement.length() - 1);
+            int lane = Integer.parseInt(placement.split(":")[1]);
 
-            String placementOther = getPlacementTag(!start);
-            int directionOther = -2;
-            if (placementOther != null) {
-                directionOther = placementOther.charAt(placementOther.length()-1) == 'f' ? 1 :
-                        placementOther.charAt(placementOther.length()-1) == 'b' ? -1 : 0;
-                placementOther = placementOther.substring(0, placementOther.length()-1);
-            }
+//        int directionOther = -2;
+//        if (placementOther != null) {
+//            directionOther = placementOther.charAt(placementOther.length()-1) == 'f' ? 1 :
+//                    placementOther.charAt(placementOther.length()-1) == 'b' ? -1 : 0;
+//            placementOther = placementOther.substring(0, placementOther.length()-1);
+//        }
 
-
+//        int laneOther = Integer.MIN_VALUE;
+//        if (placementOther != null) Integer.parseInt(placementOther.split(":")[1]); // ?? isn't this a no-op?
 
             // Get offset
             List<RoadPiece> pieces = getRoadPieces(false);
-            int lane = Integer.parseInt(placement.split(":")[1]);
-            int laneOther = Integer.MIN_VALUE;
-            if (placementOther != null) Integer.parseInt(placementOther.split(":")[1]);
             double offsetSoFar = 0;
             boolean valid = false;
 
@@ -282,13 +289,13 @@ public class MarkedRoadRenderer extends RoadRenderer {
                 RoadPiece p = pieces.get(i);
 
                 boolean correctLane = p._position+1 == lane && p._direction == direction && (p._direction == 0 || p instanceof Lane);
-                boolean correctLaneOther = false;
-                if (placementOther != null) correctLaneOther = p._position+1 == laneOther && p._direction == directionOther && (p._direction == 0 || p instanceof Lane);
+//                boolean correctLaneOther = false;
+//                if (placementOther != null) correctLaneOther = p._position+1 == laneOther && p._direction == directionOther && (p._direction == 0 || p instanceof Lane);
 
-                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (pieces.get(i-1) instanceof Lane ? (Utils.
+                offsetSoFar += (ignoreWidthTags && !correctLane /*&& !correctLaneOther*/) ? (pieces.get(i-1) instanceof Lane ? (Utils.
                         WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER) :
                         Utils.RENDERING_WIDTH_DIVIDER)/2 : (pieces.get(i-1).getWidth(start) / 2);
-                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (p instanceof Lane ? (Utils.
+                offsetSoFar += (ignoreWidthTags && !correctLane /*&& !correctLaneOther*/) ? (p instanceof Lane ? (Utils.
                         WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER) :
                         Utils.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2);
 
@@ -393,7 +400,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
     }
 
-    private String getPlacementTag(boolean start) {
+    public String getPlacementTag(boolean start) {
         String output = null;
         if (start && _way.hasTag("placement:start") && Utils.isOneway(_way)) {
             output = _way.get("placement:start") + "f";

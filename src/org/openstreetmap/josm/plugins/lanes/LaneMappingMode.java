@@ -273,12 +273,15 @@ public class LaneMappingMode extends MapMode implements MouseListener, MouseMoti
                 if (!handled.contains(n.getUniqueId())) {
                     handled.add(n.getUniqueId());
                     executor.execute(() -> {
-                        if (!Utils.nodeShouldBeIntersection(n, this)) return;
+                        Utils.WayConnectionType type = Utils.calculateNodeIntersectionType(n, this);
+                        if (type != null && type != Utils.WayConnectionType.INCOMPLETE && type != Utils.WayConnectionType.CONTINUATION) System.out.println("Node " + n.getId() + " is " + type);
+                        if (type == Utils.WayConnectionType.INTERSECTION) {
 //                        try {
                             NodeIntersectionRenderer newest = new NodeIntersectionRenderer(n, mv, this);
                             intersections.add(newest);
                             nodeIdToISR.put(n.getUniqueId(), newest);
 //                        } catch (Exception ignored) {}
+                        }
                     });
                 }
             }

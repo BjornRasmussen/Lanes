@@ -106,6 +106,7 @@ public class Utils {
     public enum LaneType {DRIVING, BICYCLE, BUS, HOV}
     public enum DividerType {DASHED, QUICK_DASHED, DASHED_FOR_RIGHT, DASHED_FOR_LEFT, SOLID, DOUBLE_SOLID, CENTRE_DIVIDER_WIDE,
         CENTRE_LANE, SOLID_DIVIDER_WIDE, BACKWARD_DIVIDER_WIDE, FORWARD_DIVIDER_WIDE, UNMARKED_ROAD_EDGE, UNTAGGED_ROAD_EDGE}
+    public enum WayConnectionType {INCOMPLETE, ROAD_END, CONTINUATION, LANES_CHANGING, INTERSECTION}
     // </editor-fold>
 
 
@@ -709,13 +710,37 @@ public class Utils {
         return output;
     }
 
-    public static boolean nodeShouldBeIntersection(Node n, LaneMappingMode m) {
-        boolean roadsCorrect = numRoadsFromNode(n, m, true) > 2;
-        boolean anyRoundabouts = false;
-        for (Way w : n.getParentWays()) if (m.wayIdToRSR.containsKey(w.getUniqueId()) && w.hasTag("junction", "roundabout")) anyRoundabouts = true;
-        return roadsCorrect && !anyRoundabouts;
-    }
+    public static WayConnectionType calculateNodeIntersectionType(Node n, LaneMappingMode m) {
+        int numRoads = numRoadsFromNode(n, m, true);
 
+        if (numRoads == 0) return null;
+
+        if (numRoads == 1) {
+            if (n.hasTag("noexit") || n.hasTag("highway", "turning_circle")) return WayConnectionType.ROAD_END;
+            return WayConnectionType.INCOMPLETE;
+        }
+
+        List<Way> ways = n.getParentWays();
+        if (numRoads == 2) {
+            String lanes = null;
+            for (Way w : ways) {
+                if (m.wayIdToRSR.containsKey(w.getUniqueId())) {
+                    if (lanes == null) {
+                        lanes = w.get("lanes");
+                    } else {
+                        if (lanes.equals(w.get("lanes"))) return WayConnectionType.LANES_CHANGING;
+                        break;
+                    }
+                }
+            }
+            return WayConnectionType.CONTINUATION;
+        }
+
+        // TODO let roundabouts be INTERSECTIONs and render any intersection where no rights of way cross (only merge) as a lane merging into a main road.
+        for (Way w : ways) if (m.wayIdToRSR.containsKey(w.getUniqueId()) && w.hasTag("junction", "roundabout")) return WayConnectionType.CONTINUATION;
+
+        return WayConnectionType.INTERSECTION;
+    }
 
     public static LatLon bezier(double wayThrough, LatLon... inputs) {
         return bezier(wayThrough, Arrays.asList(inputs));

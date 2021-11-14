@@ -177,7 +177,9 @@ public class UtilsPresets {
             }
             output.put("lane_markings", "no");
         } else {
-            if (p.getLanesBackward() != 0 || p.getLanesBothWays() != 0 || p.getLanesForward() != 1) output.put("lane_markings", "yes");
+            if ((p.getLanesBackward() != 0 || p.getLanesBothWays() != 0 || p.getLanesForward() != 1) && !w.hasTag("lane_markings", "yes"))  {
+                output.put("lane_markings", "");
+            }
             output.put("width", "");
             output.put("narrow", "");
             output.putAll(setLanesInDirection(w, 1, p.getLanesForward()));

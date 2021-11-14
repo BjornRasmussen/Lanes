@@ -4,10 +4,10 @@ import org.openstreetmap.josm.command.ChangeCommand;
 import org.openstreetmap.josm.command.Command;
 import org.openstreetmap.josm.command.SequenceCommand;
 import org.openstreetmap.josm.data.UndoRedoHandler;
+import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
-import org.openstreetmap.josm.gui.util.GuiHelper;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,7 +15,7 @@ import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.List;
 
-public class MarkedRoadRenderer extends RoadRenderer {
+public class RoadRendererMarked extends RoadRenderer {
 
     // <editor-fold defaultstate="collapsed" desc="Variables">
 
@@ -39,20 +39,17 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     // </editor-fold>
 
-    protected MarkedRoadRenderer(Way w, MapView mv, LaneMappingMode parent) {
+    protected RoadRendererMarked(Way w, MapView mv, LaneMappingMode parent) {
         super(w, mv, parent);
 
         try { createRoadLayout(); } catch (Exception e) { _isValid = false; _alignment = w; }
     }
 
-    @Override
-    public Way getAlignment() { return _alignment; }
-
     // <editor-fold defaultstate="collapsed" desc="Methods for rendering">
 
     public void render(Graphics2D g) {
         try {
-            renderAsphalt(g, Utils.DEFAULT_ASPHALT_COLOR);
+            renderAsphalt(g, UtilsRender.DEFAULT_ASPHALT_COLOR);
             List<RoadPiece> roadPieces = getRoadPieces(true);
             for (RoadPiece roadPiece : roadPieces) {
                 roadPiece.render(g);
@@ -62,7 +59,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     @Override
     void renderPopup(Graphics2D g, Point center, double bearing, double distOut, double pixelsPerMeter) {
-        renderAsphaltPopup(g, Utils.POPUP_ASPHALT_COLOR, center, bearing, distOut, pixelsPerMeter);
+        renderAsphaltPopup(g, UtilsRender.POPUP_ASPHALT_COLOR, center, bearing, distOut, pixelsPerMeter);
 
         for (RoadPiece p : getRoadPieces(true)) {
             try {
@@ -101,7 +98,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
         if (tags.containsKey("lanes:forward") && numLanesForward == -1) {
             numLanesForward = Integer.parseInt(tags.get("lanes:forward"));
         }
-        if (tags.containsKey("lanes") && Utils.isOneway(_way) && numLanesForward == -1) {
+        if (tags.containsKey("lanes") && UtilsGeneral.isOneway(_way) && numLanesForward == -1) {
             numLanesForward = Integer.parseInt(tags.get("lanes"));
         }
         if (tags.containsKey("lanes:backward") && numLanesBackward == -1) {
@@ -114,7 +111,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
         if (numLanesBothWays == -1) numLanesBothWays = 0; // Assume no centre lane.
 
         // Distribute remaining lanes to unspecified directions (lanes=5 & lanes:forward=3 -> assume lanes:backward=2)
-        if (!(numLanesBackward == 0 && numLanesForward == 0 && numLanesBothWays != 0) && tags.containsKey("lanes") && !Utils.isOneway(_way)) {
+        if (!(numLanesBackward == 0 && numLanesForward == 0 && numLanesBothWays != 0) && tags.containsKey("lanes") && !UtilsGeneral.isOneway(_way)) {
             int lanes = Integer.parseInt(tags.get("lanes")) - numLanesBothWays;
             if (numLanesForward == -1 && numLanesBackward == -1) {
                 numLanesForward = lanes-lanes/2;
@@ -131,13 +128,13 @@ public class MarkedRoadRenderer extends RoadRenderer {
             numLanesBothWays = 0;
         }
 
-        _leftRoadEdge = new RoadEdge(Utils.isRightHand(_way) ? -1 : 1, -1, _mv, this);
-        _rightRoadEdge = new RoadEdge(Utils.isRightHand(_way) ? 1 : -1, -1, _mv, this);
+        _leftRoadEdge = new RoadPieceEdge(UtilsGeneral.isRightHand(_way) ? -1 : 1, -1, _mv, this);
+        _rightRoadEdge = new RoadPieceEdge(UtilsGeneral.isRightHand(_way) ? 1 : -1, -1, _mv, this);
 
         for (int i = 0; i < numLanesForward; i++) {
-            _forwardLanes.add(new Lane(1, i, _mv, this));
+            _forwardLanes.add(new RoadPieceLane(1, i, _mv, this));
             if (i != numLanesForward-1) {
-                _forwardDividers.add(new Divider(1, i, _mv, this));
+                _forwardDividers.add(new RoadPieceDivider(1, i, _mv, this));
                 _forwardLanes.get(i).setRightPiece(_forwardDividers.get(i));
                 _forwardDividers.get(i).setLeftPiece(_forwardLanes.get(i));
             }
@@ -147,9 +144,9 @@ public class MarkedRoadRenderer extends RoadRenderer {
             }
         }
         for (int i = 0; i < numLanesBackward; i++) {
-            _backwardLanes.add(new Lane(-1, i, _mv, this));
+            _backwardLanes.add(new RoadPieceLane(-1, i, _mv, this));
             if (i != numLanesBackward-1) {
-                _backwardDividers.add(new Divider(-1, i, _mv, this));
+                _backwardDividers.add(new RoadPieceDivider(-1, i, _mv, this));
                 _backwardLanes.get(i).setRightPiece(_backwardDividers.get(i));
                 _backwardDividers.get(i).setLeftPiece(_backwardLanes.get(i));
             }
@@ -161,13 +158,13 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
         if (numLanesBackward != 0) {
             if (numLanesBothWays <= 0) {
-                _bothWaysLane = new Divider(0, 0, _mv, this);
+                _bothWaysLane = new RoadPieceDivider(0, 0, _mv, this);
             } else {
-                _bothWaysLane = new Lane(0, 0, _mv, this);
+                _bothWaysLane = new RoadPieceLane(0, 0, _mv, this);
             }
         }
         if (_backwardLanes.size() != 0) {
-            if (Utils.isRightHand(_way)) {
+            if (UtilsGeneral.isRightHand(_way)) {
                 _backwardLanes.get(0).setLeftPiece(_bothWaysLane);
                 _bothWaysLane.setLeftPiece(_backwardLanes.get(0));
                 _forwardLanes.get(0).setLeftPiece(_bothWaysLane);
@@ -181,34 +178,34 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
 
         // If road has a width tag, distribute that width among all lanes that don't have their width explicitly set.
-        String widthTag = _way.get("width");
-        String widthTagStart = _way.get("width:start");
-        String widthTagEnd = _way.get("width:end");
+        String widthTag = _way.hasTag("width") ? _way.get("width") : _way.get("est_width");
+        String widthTagStart = _way.hasTag("width:start") ? _way.get("width:start") : _way.get("est_width:start");
+        String widthTagEnd = _way.hasTag("width:end") ? _way.get("width:end") : _way.get("est_width:end");
 
-        double width = Utils.parseWidth(widthTag);
-        double widthStart = Utils.parseWidth(widthTagStart);
-        double widthEnd = Utils.parseWidth(widthTagEnd);
+        double width = UtilsGeneral.parseWidth(widthTag);
+        double widthStart = UtilsGeneral.parseWidth(widthTagStart);
+        double widthEnd = UtilsGeneral.parseWidth(widthTagEnd);
         if (widthTagStart == null || widthTagStart.equals("")) { widthStart = width; widthTagStart = widthTag; }
         if (widthTagEnd == null || widthTagEnd.equals("")) { widthEnd = width; widthTagEnd = widthTag; }
         if (widthTag != null || widthTagStart != null || widthTagEnd != null) {
             List<RoadPiece> pieces = new ArrayList<>();
-            List<Lane> lanes = new ArrayList<>();
+            List<RoadPieceLane> lanes = new ArrayList<>();
             for (RoadPiece r : _forwardLanes) {
-                lanes.add((Lane) r);
+                lanes.add((RoadPieceLane) r);
                 pieces.add(r);
             }
             for (RoadPiece r : _forwardDividers) {
                 pieces.add(r);
             }
             for (RoadPiece r : _backwardLanes) {
-                lanes.add((Lane) r);
+                lanes.add((RoadPieceLane) r);
                 pieces.add(r);
             }
             for (RoadPiece r : _backwardDividers) {
                 pieces.add(r);
             }
 
-            if (_bothWaysLane instanceof Lane) lanes.add((Lane) _bothWaysLane);
+            if (_bothWaysLane instanceof RoadPieceLane) lanes.add((RoadPieceLane) _bothWaysLane);
             pieces.add(_bothWaysLane);
             double widthExistingStart = 0;
             double widthExistingEnd = 0;
@@ -220,11 +217,11 @@ public class MarkedRoadRenderer extends RoadRenderer {
                 String pieceWidthTagStart = r.widthTag(true);
                 String pieceWidthTagEnd = r.widthTag(false);
                 if (widthTagStart != null) {
-                    double val = Utils.parseWidth(pieceWidthTagStart);
+                    double val = UtilsGeneral.parseWidth(pieceWidthTagStart);
                     if (!Double.isNaN(val)) widthExistingStart += val;
                 }
                 if (widthTagEnd != null) {
-                    double val = Utils.parseWidth(pieceWidthTagEnd);
+                    double val = UtilsGeneral.parseWidth(pieceWidthTagEnd);
                     if (!Double.isNaN(val)) widthExistingEnd += val;
                 }
             }
@@ -244,12 +241,12 @@ public class MarkedRoadRenderer extends RoadRenderer {
             double widthAssumedEndShouldBe = Math.max(widthEnd - widthExistingEnd, 0);
             double multiplierStart = widthAssumedStartShouldBe/widthAssumedStart;
             double multiplierEnd = widthAssumedEndShouldBe/widthAssumedEnd;
-            for (RoadPiece r : lanes) {
-                if (r.widthTag(true) == null) {
-                    ((Lane) r).setStartWidthMultiplier(multiplierStart);
+            for (RoadPieceLane r : lanes) {
+                if (widthTagStart != null && !widthTagStart.equals("") && r.widthTag(true) == null) {
+                    r.setStartWidthMultiplier(multiplierStart);
                 }
-                if (r.widthTag(false) == null) {
-                    ((Lane) r).setEndWidthMultiplier(multiplierEnd);
+                if (widthTagEnd != null && !widthTagEnd.equals("") && r.widthTag(false) == null) {
+                    r.setEndWidthMultiplier(multiplierEnd);
                 }
             }
         }
@@ -259,7 +256,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
         Map<String, String> tags = _way.getInterestingTags();
         int numLanes = -1;
         for (String key : tags.keySet()) {
-            if (!key.contains("note") && (!key.contains("FIXME")) && (!key.contains("fixme")) && (direction == 1 ? ((key.endsWith(":lanes") && Utils.isOneway(_way)) || key.endsWith(":lanes:forward")) :
+            if (!key.contains("note") && (!key.contains("FIXME")) && (!key.contains("fixme")) && (direction == 1 ? ((key.endsWith(":lanes") && UtilsGeneral.isOneway(_way)) || key.endsWith(":lanes:forward")) :
                     direction == 0 ? key.endsWith(":lanes:both_ways") : key.endsWith(":lanes:backward"))) {
 
                 // This runs if the tag being analyzed is a lane tag applying to this direction.
@@ -281,7 +278,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
             JOptionPane.showMessageDialog(MainApplication.getMainFrame(), "End is NaN");
         }
         double placementDiff = getPlacementAt(false, true) - getPlacementAt(true, true);
-        _alignment = Utils.getParallel(_way, 0, placementDiff, true, otherStartAngle, otherEndAngle);
+        _alignment = UtilsSpatial.getParallel(_way, 0, placementDiff, true, otherStartAngle, otherEndAngle);
         _offsetToLeftEnd -= placementDiff;
     }
 
@@ -324,44 +321,44 @@ public class MarkedRoadRenderer extends RoadRenderer {
             for (int i = 1; i < pieces.size(); i++) {
                 RoadPiece p = pieces.get(i);
 
-                boolean correctLane = p._position+1 == lane && p._direction == direction && (p._direction == 0 || p instanceof Lane);
+                boolean correctLane = p._position+1 == lane && p._direction == direction && (p._direction == 0 || p instanceof RoadPieceLane);
                 boolean correctLaneOther = false;
-                if (placementOther != null) correctLaneOther = p._position+1 == laneOther && p._direction == directionOther && (p._direction == 0 || p instanceof Lane);
+                if (placementOther != null) correctLaneOther = p._position+1 == laneOther && p._direction == directionOther && (p._direction == 0 || p instanceof RoadPieceLane);
 
-                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (pieces.get(i-1) instanceof Lane ? (Utils.
-                        WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER) :
-                        Utils.RENDERING_WIDTH_DIVIDER)/2 : (pieces.get(i-1).getWidth(start) / 2);
-                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (p instanceof Lane ? (Utils.
-                        WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER) :
-                        Utils.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2);
+                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (pieces.get(i-1) instanceof RoadPieceLane ?
+                        (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER) :
+                        UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : (pieces.get(i-1).getWidth(start) / 2);
+                offsetSoFar += (ignoreWidthTags && !correctLane && !correctLaneOther) ? (p instanceof RoadPieceLane ?
+                        (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER) :
+                        UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2);
 
-                if (p._direction == 1 && p instanceof Lane && (minForward == null || minForward._position > p._position)) {
+                if (p._direction == 1 && p instanceof RoadPieceLane && (minForward == null || minForward._position > p._position)) {
                     minForward = p;
                     minForwardOffset = offsetSoFar;
                 }
-                if (p._direction == 1 && p instanceof Lane && (maxForward == null || maxForward._position < p._position)) {
+                if (p._direction == 1 && p instanceof RoadPieceLane && (maxForward == null || maxForward._position < p._position)) {
                     maxForward = p;
                     maxForwardOffset = offsetSoFar;
                 }
-                if (p._direction == -1 && p instanceof Lane  && (minBackward == null || minBackward._position > p._position)) {
+                if (p._direction == -1 && p instanceof RoadPieceLane && (minBackward == null || minBackward._position > p._position)) {
                     minBackward = p;
                     minBackwardOffset = offsetSoFar;
                 }
-                if (p._direction == -1 && p instanceof Lane  && (maxBackward == null || maxBackward._position < p._position)) {
+                if (p._direction == -1 && p instanceof RoadPieceLane && (maxBackward == null || maxBackward._position < p._position)) {
                     maxBackward = p;
                     maxBackwardOffset = offsetSoFar;
                 }
 
-                if (p._position+1 == lane && p._direction == direction && (p._direction == 0 || p instanceof Lane)) {
+                if (p._position+1 == lane && p._direction == direction && (p._direction == 0 || p instanceof RoadPieceLane)) {
                     if ((direction == 1 && placement.startsWith("left_of")) ||
                             (direction == -1 && placement.startsWith("right_of"))) {
-                        offsetSoFar -= Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2));
+                        offsetSoFar -= UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2));
                     }
                     if ((direction == 1 && placement.startsWith("right_of")) ||
                             (direction == -1 && placement.startsWith("left_of"))) {
-                        offsetSoFar += Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2));
+                        offsetSoFar += UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : (p.getWidth(start) / 2));
                     }
                     valid = true;
                     break;
@@ -371,28 +368,28 @@ public class MarkedRoadRenderer extends RoadRenderer {
             if (!valid && direction == 1) {
                 if (minForward._position+1 > lane) {
                     int numLanesAway = minForward._position + 1 - lane;
-                    offsetSoFar = minForwardOffset - numLanesAway * Utils.WIDTH_LANES;
+                    offsetSoFar = minForwardOffset - numLanesAway * UtilsRender.WIDTH_LANES;
 
                     if (placement.startsWith("left_of")) {
-                        offsetSoFar -= Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : minForward.getWidth(start) / 2);
+                        offsetSoFar -= UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : minForward.getWidth(start) / 2);
                     }
                     if (placement.startsWith("right_of")) {
-                        offsetSoFar += Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : minForward.getWidth(start) / 2);
+                        offsetSoFar += UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : minForward.getWidth(start) / 2);
                     }
                 }
                 if (maxForward._position+1 < lane) {
                     int numLanesAway = maxForward._position + 1 - lane;
-                    offsetSoFar = maxForwardOffset - numLanesAway * Utils.WIDTH_LANES;
+                    offsetSoFar = maxForwardOffset - numLanesAway * UtilsRender.WIDTH_LANES;
 
                     if (placement.startsWith("left_of")) {
-                        offsetSoFar -= Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : maxForward.getWidth(start) / 2);
+                        offsetSoFar -= UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : maxForward.getWidth(start) / 2);
                     }
                     if (placement.startsWith("right_of")) {
-                        offsetSoFar += Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : maxForward.getWidth(start) / 2);
+                        offsetSoFar += UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : maxForward.getWidth(start) / 2);
                     }
                 }
                 valid = true;
@@ -401,28 +398,28 @@ public class MarkedRoadRenderer extends RoadRenderer {
             if (!valid && direction == -1) {
                 if (minBackward._position+1 > lane) {
                     int numLanesAway = minBackward._position + 1 - lane;
-                    offsetSoFar = minBackwardOffset + numLanesAway * Utils.WIDTH_LANES;
+                    offsetSoFar = minBackwardOffset + numLanesAway * UtilsRender.WIDTH_LANES;
 
                     if (placement.startsWith("left_of")) {
-                        offsetSoFar += Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : minBackward.getWidth(start) / 2);
+                        offsetSoFar += UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : minBackward.getWidth(start) / 2);
                     }
                     if (placement.startsWith("right_of")) {
-                        offsetSoFar -= Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ? (Utils.
-                                WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : minBackward.getWidth(start) / 2);
+                        offsetSoFar -= UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : minBackward.getWidth(start) / 2);
                     }
                 }
                 if (maxBackward._position+1 < lane) {
                     int numLanesAway = maxBackward._position + 1 - lane;
-                    offsetSoFar = maxBackwardOffset + numLanesAway * Utils.WIDTH_LANES;
+                    offsetSoFar = maxBackwardOffset + numLanesAway * UtilsRender.WIDTH_LANES;
 
                     if (placement.startsWith("left_of")) {
-                        offsetSoFar -= Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
-                                (Utils.WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : maxBackward.getWidth(start) / 2);
+                        offsetSoFar -= UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : maxBackward.getWidth(start) / 2);
                     }
                     if (placement.startsWith("right_of")) {
-                        offsetSoFar += Utils.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
-                                (Utils.WIDTH_LANES-Utils.RENDERING_WIDTH_DIVIDER)/2 : maxBackward.getWidth(start) / 2);
+                        offsetSoFar += UtilsRender.RENDERING_WIDTH_DIVIDER / 2 + (ignoreWidthTags ?
+                                (UtilsRender.WIDTH_LANES- UtilsRender.RENDERING_WIDTH_DIVIDER)/2 : maxBackward.getWidth(start) / 2);
                     }
                 }
                 valid = true;
@@ -438,9 +435,9 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     private String getPlacementTag(boolean start) {
         String output = null;
-        if (start && _way.hasTag("placement:start") && Utils.isOneway(_way)) {
+        if (start && _way.hasTag("placement:start") && UtilsGeneral.isOneway(_way)) {
             output = _way.get("placement:start") + "f";
-        } else if (!start && _way.hasTag("placement:end") && Utils.isOneway(_way)) {
+        } else if (!start && _way.hasTag("placement:end") && UtilsGeneral.isOneway(_way)) {
             output = _way.get("placement:end") + "f";
         } else if (start && _way.hasTag("placement:forward:start")) {
             output = _way.get("placement:forward:start") + "f";
@@ -454,7 +451,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
             output = _way.get("placement:both_ways:start") + "m";
         } else if (!start && _way.hasTag("placement:both_ways:end")) {
             output = _way.get("placement:both_ways:end") + "m";
-        } else if (_way.hasTag("placement") && Utils.isOneway(_way)) {
+        } else if (_way.hasTag("placement") && UtilsGeneral.isOneway(_way)) {
             output = _way.get("placement") + "f";
         } else if (_way.hasTag("placement:forward")) {
             output = _way.get("placement:forward") + "f";
@@ -480,43 +477,27 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
     }
 
-    @Override
-    public double getWidth(boolean start) {
-        double output = -1 * Utils.RENDERING_WIDTH_DIVIDER; // To offset the shoulder width added to each side.
-        for (RoadPiece piece : getRoadPieces(false)) {
-            output += piece.getWidth(start);
-        }
-        return output;
-    }
-
-    @Override
-    public double sideWidth(boolean start, boolean left) {
-        double otls = (_offsetToLeftStart+Utils.RENDERING_WIDTH_DIVIDER/2); // otls = offset to left start
-        double otle = (_offsetToLeftEnd+Utils.RENDERING_WIDTH_DIVIDER/2); // otle = offset to left end
-        return start ? (left ? otls : getWidth(true)-Utils.RENDERING_WIDTH_DIVIDER-otls)
-                : (left ? otle : getWidth(false)-Utils.RENDERING_WIDTH_DIVIDER-otle);
-    }
-
+    // Returns all child RoadPieces, only used by child roadpieces to find out offsets and stuff.
     public List<RoadPiece> getRoadPieces(boolean renderingOrder) {
         List<RoadPiece> output = new ArrayList<>();
 
         if (renderingOrder) {
             output.addAll(getLanesAndDividers(_forwardLanes, _forwardDividers, 1));
             output.addAll(getLanesAndDividers(_backwardLanes, _backwardDividers, -1));
-            if (_backwardLanes.size() != 0 || (_bothWaysLane instanceof Lane)) {
+            if (_backwardLanes.size() != 0 || (_bothWaysLane instanceof RoadPieceLane)) {
                 output.add(_bothWaysLane);
             }
             output.add(_leftRoadEdge);
             output.add(_rightRoadEdge);
         } else {
             output.add(_leftRoadEdge);
-            if (Utils.isRightHand(_way)) {
+            if (UtilsGeneral.isRightHand(_way)) {
                 output.addAll(getLanesAndDividers(_backwardLanes, _backwardDividers, -1));
-                if (_backwardLanes.size() != 0 || _bothWaysLane instanceof Lane) output.add(_bothWaysLane);
+                if (_backwardLanes.size() != 0 || _bothWaysLane instanceof RoadPieceLane) output.add(_bothWaysLane);
                 output.addAll(getLanesAndDividers(_forwardLanes, _forwardDividers, 1));
             } else {
                 output.addAll(getLanesAndDividers(_forwardLanes, _forwardDividers, 1));
-                if (_backwardLanes.size() != 0 || _bothWaysLane instanceof Lane) output.add(_bothWaysLane);
+                if (_backwardLanes.size() != 0 || _bothWaysLane instanceof RoadPieceLane) output.add(_bothWaysLane);
                 output.addAll(getLanesAndDividers(_backwardLanes, _backwardDividers, -1));
             }
             output.add(_rightRoadEdge);
@@ -542,18 +523,26 @@ public class MarkedRoadRenderer extends RoadRenderer {
 
     // </editor-fold>
 
-    // <editor-fold defaultstate="collapsed" desc="Methods for Processing Alignments and Angles (For clean connections between ways)">
+    // <editor-fold defaultstate="collapsed" desc="Alignments, Width and End Angles">
 
     @Override
-    public void updateAlignment() {
-        // Recalculate alignment, this time using nearby ways for the angle.
-        if (_isValid) {
-            otherStartAngle = getOtherAngle(true);
-            otherEndAngle = getOtherAngle(false);
-            getPlacementInformation();
-        } else {
-            _alignment = getWay();
+    public Way getAlignment() { return _alignment; }
+
+    @Override
+    public double getWidth(boolean start) {
+        double output = -1 * UtilsRender.RENDERING_WIDTH_DIVIDER; // To offset the shoulder width added to each side.
+        for (RoadPiece piece : getRoadPieces(false)) {
+            output += piece.getWidth(start);
         }
+        return output;
+    }
+
+    @Override
+    public double sideWidth(boolean start, boolean left) {
+        double otls = (_offsetToLeftStart+ UtilsRender.RENDERING_WIDTH_DIVIDER/2); // otls = offset to left start
+        double otle = (_offsetToLeftEnd+ UtilsRender.RENDERING_WIDTH_DIVIDER/2); // otle = offset to left end
+        return start ? (left ? otls : getWidth(true)- UtilsRender.RENDERING_WIDTH_DIVIDER-otls)
+                : (left ? otle : getWidth(false)- UtilsRender.RENDERING_WIDTH_DIVIDER-otle);
     }
 
     @Override
@@ -572,15 +561,39 @@ public class MarkedRoadRenderer extends RoadRenderer {
         Way alignmentPart = (segment < 0) ? getAlignment() : getAlignments().get(segment);
 
         // Get offsets for the specific alignment part.
-        double swt = (segmentStartPoints.size() == 0 || segment < 0) ? 0 : (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
+        double swt = (segmentStartPoints.size() == 0 || segment < 1) ? 0 : (Math.max(segmentStartPoints.get(segment), 0)/getAlignment().getLength());
         double startOffset = swt*offsetEnd + (1-swt)*offsetStart;
-        double ewt = (segmentEndPoints.size() == 0 || segment < 0) ? getAlignment().getLength() + 100 : (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
+        double ewt = (segmentEndPoints.size() == 0 || segment < 0) ? 1 : (Math.min(segmentEndPoints.get(segment), getAlignment().getLength())/getAlignment().getLength());
         double endOffset = ewt*offsetEnd + (1-ewt)*offsetStart;
 
         // Generate parallel way.
-        return Utils.getParallel(alignmentPart, startOffset, endOffset, false,
+        for (Node i : getAlignment().getNodes()) {
+            if (i == null || !i.isLatLonKnown()) {
+                throw new RuntimeException("way # " + _way.getUniqueId() + " has null nodes");
+            }
+        }
+        Way output = UtilsSpatial.getParallel(alignmentPart, startOffset, endOffset, false,
                 (segment < 0 || segmentStartPoints.get(segment) < 0.1) ? otherStartAngle : Double.NaN,
                 (segment < 0 || segmentEndPoints.get(segment) > getAlignment().getLength()-0.1) ? otherEndAngle : Double.NaN);
+        for (Node i : output.getNodes()) {
+            if (i == null || !i.isLatLonKnown()) {
+                throw new RuntimeException("way # " + _way.getUniqueId() + " parallel, offsets " + startOffset + ", " +
+                        endOffset + ", offsetStart = " + offsetStart + ", offsetEnd = " + offsetEnd + ", swt = "  + swt + ", ewt = " + ewt);
+            }
+        }
+        return output;
+    }
+
+    @Override
+    public void updateEndAngles() {
+        // Recalculate alignment, this time using nearby ways for the angle.
+        if (_isValid) {
+            otherStartAngle = getOtherAngle(true);
+            otherEndAngle = getOtherAngle(false);
+            getPlacementInformation();
+        } else {
+            _alignment = getWay();
+        }
     }
 
     // </editor-fold>
@@ -595,12 +608,12 @@ public class MarkedRoadRenderer extends RoadRenderer {
         String[] forward = new String[_forwardLanes.size()];
         String[] backward = new String[_backwardLanes.size()];
         for (RoadPiece p : getRoadPieces(false)) {
-            if (p instanceof Lane) {
+            if (p instanceof RoadPieceLane) {
                 if (p._direction == 1) {
-                    forward[p._position] = ((Lane) p).getChange();
+                    forward[p._position] = ((RoadPieceLane) p).getChange();
                 }
                 if (p._direction == -1) {
-                    backward[p._position] = ((Lane) p).getChange();
+                    backward[p._position] = ((RoadPieceLane) p).getChange();
                 }
             }
         }
@@ -640,7 +653,7 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
 
         if (forwardIsAllSame && !(backwardIsAllSame && forwardEqualsBackward) && !forwardChange.toString().equals("")) {
-            addTag(_way, "change" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
+            addTag(_way, "change" + (UtilsGeneral.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
 
         }
 
@@ -649,14 +662,14 @@ public class MarkedRoadRenderer extends RoadRenderer {
         }
 
         if (!forwardIsAllSame && !forwardChange.toString().equals("")) {
-            addTag(_way, "change:lanes" + (Utils.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
+            addTag(_way, "change:lanes" + (UtilsGeneral.isOneway(_way) ? "" : ":forward"), forwardChange.toString(), cmds);
         }
 
         if (!backwardIsAllSame && !backwardChange.toString().equals("")) {
             addTag(_way, "change:lanes:backward", backwardChange.toString(), cmds);
         }
 
-        SequenceCommand c = new SequenceCommand("Change Divider Type", cmds);
+        SequenceCommand c = new SequenceCommand("Change RoadPieceDivider Type", cmds);
         UndoRedoHandler.getInstance().add(c);
     }
 

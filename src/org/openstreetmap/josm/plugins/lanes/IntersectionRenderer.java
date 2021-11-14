@@ -2,17 +2,19 @@ package org.openstreetmap.josm.plugins.lanes;
 
 import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.Node;
+import org.openstreetmap.josm.data.osm.OsmPrimitiveType;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
-import org.openstreetmap.josm.gui.util.GuiHelper;
 
-import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-public abstract class IntersectionRenderer {
+
+public class IntersectionRenderer {
     protected MapView _mv;
     protected LaneMappingMode _m;
 
@@ -37,24 +39,60 @@ public abstract class IntersectionRenderer {
     protected List<Double> _leftBearings;
     protected List<Way> _roadMarkings;
     protected List<Way> _roadMarkingsSimplified;
-    protected List<Node> _ordering;
-    protected List<Node> _vertextOrdering;
 
-    protected List<LatLon> _bruh = new ArrayList<>();
+    private List<IntersectionGraphSegment> _internalGraph; // Internal graph structure, used for routing between nodes.
+    private List<Long> _nodeIds; // List of uniqueIds of nodes in intersections within the renderer.
+    private LatLon _pos;
 
-    protected double meters100PixLastRender = -1; // for know if the zoom has been changed since last render.
 
-    protected boolean _isValid = true;
-
-    protected IntersectionRenderer(MapView mv, LaneMappingMode m) {
+    public IntersectionRenderer(List<Long> nodeIds, List<IntersectionRenderer> addToThis, MapView mv, LaneMappingMode m) {
         _mv = mv;
         _m = m;
         _toBeTrimmed = new ArrayList<>();
+
+        _internalGraph = new ArrayList<>();
+        _wayVectors = new ArrayList<>();
+        _nodeIds = new ArrayList<>();
+        _nodeIds.addAll(nodeIds);
+
+        List<Long> nodeIdsCopy = new ArrayList<>();
+        nodeIdsCopy.addAll(nodeIds);
+
+        // Get _wayVectors and _internalGraph:
+        explore((Node) MainApplication.getLayerManager().getEditDataSet().getPrimitiveById(nodeIds.get(0), OsmPrimitiveType.NODE),
+                new HashSet<>(), nodeIdsCopy, _internalGraph, _wayVectors, 0);
+
+        // If there are still remaining nodes that weren't part of this intersection, create a new one with them.
+        if (nodeIdsCopy.size() != 0) new IntersectionRenderer(nodeIdsCopy, addToThis, mv, m);
+
+        _trimWays = true;
+        createIntersectionLayout();
+
+        if (!_isValid) return;
+
+        // Get average of wayVector froms.
+        double totalLat = 0;
+        double totalLon = 0;
+        int num = 0;
+        for (WayVector w : _wayVectors) {
+            try {
+                LatLon thisLatLon = w.getParent().getNode(w.getFrom()).getCoor();
+                totalLat += thisLatLon.lat();
+                totalLon += thisLatLon.lon();
+                num++;
+            } catch (Exception ignored) {}
+        }
+        _pos = new LatLon(totalLat/num, totalLon/num);
+        addToThis.add(this);
     }
 
-    abstract List<WayVector> waysClockwiseOrder();
 
-    protected void createIntersectionLayout() {
+
+    protected double meters100PixLastRender = -1; // for knowing if the zoom has been changed since last render.
+
+    protected boolean _isValid = true;
+
+    protected void createIntersectionLayout() { // Minor data change, reset intersection layout, assume same road graph
         _wayVectors = waysClockwiseOrder();
         _perimeter = getPerimeter();
         _intersects = new ArrayList<>();
@@ -91,19 +129,19 @@ public abstract class IntersectionRenderer {
             // Get way at i right road edge (right going out from intersection, left going in)
             WayVector ith = _wayVectors.get(i);
             RoadRenderer ithrr = _m.wayIdToRSR.get(ith.getParent().getUniqueId());
-            Way rightSubPart = Utils.getSubPart(ith.isForward() ? ithrr.getEdge(-1, true) : ithrr.getEdge(-1, false),
+            Way rightSubPart = UtilsSpatial.getSubPart(ith.isForward() ? ithrr.getEdge(-1, true) : ithrr.getEdge(-1, false),
                     ith.isForward() ? Math.min(ith.getFrom(), ith.getTo()) : 0,
                     ith.isForward() ? ithrr.getWay().getNodesCount()-1 : Math.max(ith.getFrom(), ith.getTo()));
-            Way rightEdge = (ith.isForward() ? rightSubPart : Utils.reverseNodes(rightSubPart));
+            Way rightEdge = (ith.isForward() ? rightSubPart : UtilsSpatial.reverseNodes(rightSubPart));
             _edges.add(rightEdge);
 
             // Get way at i+1 left road edge (left going out from intersection, right going in)
             WayVector ipoth = _wayVectors.get((i == _wayVectors.size() - 1) ? 0 : i + 1);
             RoadRenderer ipothrr = _m.wayIdToRSR.get(ipoth.getParent().getUniqueId());
-            Way leftSubPart = Utils.getSubPart(ipoth.isForward() ? ipothrr.getEdge(-1, false) : ipothrr.getEdge(-1, true),
+            Way leftSubPart = UtilsSpatial.getSubPart(ipoth.isForward() ? ipothrr.getEdge(-1, false) : ipothrr.getEdge(-1, true),
                     ipoth.isForward() ? Math.min(ipoth.getFrom(), ipoth.getTo()) : 0,
                     ipoth.isForward() ? ipothrr.getWay().getNodesCount()-1 : Math.max(ipoth.getFrom(), ipoth.getTo()));
-            Way leftEdge = (ipoth.isForward() ? leftSubPart : Utils.reverseNodes(leftSubPart));
+            Way leftEdge = (ipoth.isForward() ? leftSubPart : UtilsSpatial.reverseNodes(leftSubPart));
             _edges.add(leftEdge);
 
             // Get ways from perimeter for each to intersect.  Usually, there aren't any and they just intersect each other.
@@ -123,24 +161,24 @@ public abstract class IntersectionRenderer {
             // Get the intersect of the lines, as well as info about how far into each way that intersect is.
             double[] distancesRight = new double[2];
             double[] distancesLeft = new double[2];
-            LatLon intersectRight = Utils.intersect(rightEdge, rightIntersectWay, distancesRight, true, 0, motorway, false);
-            LatLon intersectLeft = Utils.intersect(leftEdge, leftIntersectWay, distancesLeft, true, 0, motorway, false);
+            LatLon intersectRight = UtilsSpatial.intersect(rightEdge, rightIntersectWay, distancesRight, true, 0, motorway, false);
+            LatLon intersectLeft = UtilsSpatial.intersect(leftEdge, leftIntersectWay, distancesLeft, true, 0, motorway, false);
             double ext = 8;
             double extensionUsedRight = 0;
             double extensionUsedLeft = 0;
 
             if (intersectRight == null) {
                 try {
-                    intersectRight = Utils.intersect(Utils.extendWay(rightEdge, true, ext),
-                            Utils.extendWay(rightIntersectWay, true, ext), distancesRight, true, ext, motorway, false);
+                    intersectRight = UtilsSpatial.intersect(UtilsSpatial.extendWay(rightEdge, true, ext),
+                            UtilsSpatial.extendWay(rightIntersectWay, true, ext), distancesRight, true, ext, motorway, false);
                     if (intersectRight != null) extensionUsedRight = ext;
                 } catch (Exception e) { /* Usually means either rightEdge or rightIntersectWay had no nodes or one node, couldn't be extended. */ }
             }
 
             if (intersectLeft == null) {
                 try {
-                    intersectLeft = Utils.intersect(Utils.extendWay(leftEdge, true, ext),
-                            Utils.extendWay(leftIntersectWay, true, ext), distancesLeft, true, ext, motorway, false);
+                    intersectLeft = UtilsSpatial.intersect(UtilsSpatial.extendWay(leftEdge, true, ext),
+                            UtilsSpatial.extendWay(leftIntersectWay, true, ext), distancesLeft, true, ext, motorway, false);
                     if (intersectLeft != null) extensionUsedLeft = ext;
                 } catch (Exception ignored) { /* Same as above, either leftEdge or leftIntersectWay didn't have any nodes, or had only one node. */ }
             }
@@ -152,13 +190,13 @@ public abstract class IntersectionRenderer {
             double rightBearing = rightEdge.getNode(0).getCoor().bearing(rightEdge.getNode(1).getCoor());
             double leftBearing = leftEdge.getNode(0).getCoor().bearing(leftEdge.getNode(1).getCoor());
 
-            boolean skipPeri = Utils.intersect(Utils.extendWay(rightEdge, true, ext), Utils.extendWay(leftEdge, true, ext),
+            boolean skipPeri = UtilsSpatial.intersect(UtilsSpatial.extendWay(rightEdge, true, ext), UtilsSpatial.extendWay(leftEdge, true, ext),
                     new double[2], true, 0, false, true) != null;
             if (noPeri || skipPeri) {
-                _rightBackbones.add(Utils.reverseNodes(rightEdge));
+                _rightBackbones.add(UtilsSpatial.reverseNodes(rightEdge));
                 _leftBackbones.add(leftEdge);
             } else {
-                _rightBackbones.add(glue(Utils.reverseNodes(rightEdge), rightIntersectWay, ext));
+                _rightBackbones.add(UtilsSpatial.glue(UtilsSpatial.reverseNodes(rightEdge), rightIntersectWay, ext));
                 _leftBackbones.add(leftEdge);
             }
         }
@@ -171,8 +209,8 @@ public abstract class IntersectionRenderer {
             // Get ways from intersect (including intersect node) out along edges for a few meters.
             double radius = 6;
             if (_wayVectors.get(i).getParent().hasTag("in_a_junction", "yes") && !_trimWays) { radius = 30; }
-            Way leftSideSetBack = Utils.getSubPart(Utils.extendWay(_edges.get(i != 0 ? 2*i-1 : _edges.size()-1), false, 5000), maxDist, maxDist+radius);
-            Way rightSideSetBack = Utils.getSubPart(Utils.extendWay(_edges.get(2*i), false, 5000), maxDist, maxDist+radius);
+            Way leftSideSetBack = UtilsSpatial.getSubPart(UtilsSpatial.extendWay(_edges.get(i != 0 ? 2*i-1 : _edges.size()-1), false, 5000), maxDist, maxDist+radius);
+            Way rightSideSetBack = UtilsSpatial.getSubPart(UtilsSpatial.extendWay(_edges.get(2*i), false, 5000), maxDist, maxDist+radius);
 
             // Get way between endpoints of the two intersects.
             Way crossSection = new Way();
@@ -189,15 +227,15 @@ public abstract class IntersectionRenderer {
             for (Node n : alignment.getNodes()) if (n != null && n.getCoor() != null) alignmentNodesNoNull.add(n);
             Way newAlignment = new Way();
             newAlignment.setNodes(alignmentNodesNoNull);
-            LatLon l = Utils.intersect(Utils.extendWay(newAlignment, false, 100), crossSection,
+            LatLon l = UtilsSpatial.intersect(UtilsSpatial.extendWay(newAlignment, false, 100), crossSection,
                     distances, false, 0, false, false);
             if (l == null) { // If the intersect failed, then the alignment isn't between the edges (aka placement=left_of:10).
-                crossSection = Utils.extendWay(Utils.extendWay(crossSection, true, 30), false, 30);
-                l = Utils.intersect(newAlignment, crossSection, distances, false, 0,false, false);
+                crossSection = UtilsSpatial.extendWay(UtilsSpatial.extendWay(crossSection, true, 30), false, 30);
+                l = UtilsSpatial.intersect(newAlignment, crossSection, distances, false, 0,false, false);
             }
             if (l == null) {
                 double distIntoAlignment = (rightSideSetBack.getLength()+leftSideSetBack.getLength())/2;
-                double distIntersection = Utils.getSubPart(alignment, 0, _wayVectors.get(i).getFrom()).getLength();
+                double distIntersection = UtilsSpatial.getSubPart(alignment, 0, _wayVectors.get(i).getFrom()).getLength();
                 distances[0] = distIntersection + (_wayVectors.get(i).isForward() ? 1 : -1)*distIntoAlignment;
                 if (distances[0] < 0) distances[0] = 0;
                 if (distances[0] > alignment.getLength()) distances[0] = alignment.getLength();
@@ -205,9 +243,9 @@ public abstract class IntersectionRenderer {
             // Replace final nodes of the setBacks with properly parallel nodes and add gap to RoadRenderer
             // Get a "better" crossSection, which is always perpendicular to the way.
             double percent = distances[0] / alignment.getLength();
-            LatLon left = Utils.getParallelPoint(newAlignment, distances[0],
+            LatLon left = UtilsSpatial.getParallelPoint(newAlignment, distances[0],
                     percent * rr.sideWidth(false, true) + (1 - percent) * rr.sideWidth(true, true));
-            LatLon right = Utils.getParallelPoint(newAlignment, distances[0],
+            LatLon right = UtilsSpatial.getParallelPoint(newAlignment, distances[0],
                     -percent * rr.sideWidth(false, false) - (1 - percent) * rr.sideWidth(true, false));
             if (!_wayVectors.get(i).isForward()) { LatLon temp = left; left = right; right = temp; }
             Way betterCrossSection = new Way();
@@ -227,16 +265,16 @@ public abstract class IntersectionRenderer {
             if (rightBackbone != null && rightBackbone.getNodesCount() >= 2) {
                 double[] distancesRight = new double[2];
                 double ext = 40;
-                LatLon rightIntersect = Utils.intersect(Utils.extendWay(Utils.extendWay(betterCrossSection, false, 0.5), true, 0.5),
-                        Utils.extendWay(rightBackbone, true, ext), distancesRight, false, 0, false, false);
+                LatLon rightIntersect = UtilsSpatial.intersect(UtilsSpatial.extendWay(UtilsSpatial.extendWay(betterCrossSection, false, 0.5), true, 0.5),
+                        UtilsSpatial.extendWay(rightBackbone, true, ext), distancesRight, false, 0, false, false);
                 if (rightIntersect == null) {
-                    rightIntersect = Utils.intersect(Utils.extendWay(Utils.extendWay(betterCrossSection, false, 5), true, 5),
-                            Utils.extendWay(rightBackbone, true, ext), distancesRight, false, 0, false, false);
+                    rightIntersect = UtilsSpatial.intersect(UtilsSpatial.extendWay(UtilsSpatial.extendWay(betterCrossSection, false, 5), true, 5),
+                            UtilsSpatial.extendWay(rightBackbone, true, ext), distancesRight, false, 0, false, false);
                 }
                 if (rightIntersect != null) {
-                    _rightBackbones.set(i, Utils.getSubPart(rightBackbone, distancesRight[1] - ext, rightBackbone.getLength()));
+                    _rightBackbones.set(i, UtilsSpatial.getSubPart(rightBackbone, distancesRight[1] - ext, rightBackbone.getLength()));
                     _rightPoints.set(_rightPoints.size()-1, rightIntersect);
-                    _rightBearings.set(_rightBearings.size()-1, Utils.bearingAt(rightBackbone, distancesRight[1]-ext));
+                    _rightBearings.set(_rightBearings.size()-1, UtilsSpatial.bearingAt(rightBackbone, distancesRight[1]-ext));
                 } else {
                     _rightBackbones.set(i, null); // No solution, can't create alignment. No sub part will look good.
                 }
@@ -248,23 +286,23 @@ public abstract class IntersectionRenderer {
             _leftBearings.add((right.bearing(left)-Math.PI/2)%(2*Math.PI));
             if (leftBackbone != null && leftBackbone.getNodesCount() >= 2) {
                 double[] distancesLeft = new double[2];
-                LatLon leftIntersect = Utils.intersect(Utils.extendWay(Utils.extendWay(betterCrossSection, true, 0.5), false, 0.5),
-                        Utils.extendWay(leftBackbone, false, 40), distancesLeft, false, 0, false, false);
+                LatLon leftIntersect = UtilsSpatial.intersect(UtilsSpatial.extendWay(UtilsSpatial.extendWay(betterCrossSection, true, 0.5), false, 0.5),
+                        UtilsSpatial.extendWay(leftBackbone, false, 40), distancesLeft, false, 0, false, false);
                 if (leftIntersect == null) {
-                    leftIntersect = Utils.intersect(Utils.extendWay(Utils.extendWay(betterCrossSection, true, 5), false, 5),
-                            Utils.extendWay(leftBackbone, false, 30), distancesLeft, false, 0, false, false);
+                    leftIntersect = UtilsSpatial.intersect(UtilsSpatial.extendWay(UtilsSpatial.extendWay(betterCrossSection, true, 5), false, 5),
+                            UtilsSpatial.extendWay(leftBackbone, false, 30), distancesLeft, false, 0, false, false);
                 }
                 if (leftIntersect != null) {
-                    _leftBackbones.set(i == 0 ? _leftBackbones.size() - 1 : i - 1, Utils.getSubPart(leftBackbone, 0, distancesLeft[1]));
+                    _leftBackbones.set(i == 0 ? _leftBackbones.size() - 1 : i - 1, UtilsSpatial.getSubPart(leftBackbone, 0, distancesLeft[1]));
                     _leftPoints.set(_leftPoints.size()-1, leftIntersect);
-                    _leftBearings.set(_leftBearings.size()-1, (Utils.bearingAt(leftBackbone, distancesLeft[1]) + Math.PI)%(2*Math.PI));
+                    _leftBearings.set(_leftBearings.size()-1, (UtilsSpatial.bearingAt(leftBackbone, distancesLeft[1]) + Math.PI)%(2*Math.PI));
                 } else {
                     _leftBackbones.set(i == 0 ? _leftBackbones.size() - 1 : i - 1, null); // No solution, can't create alignment.  No sub part will look good.
                 }
             }
 
             // Stop the RoadRenderer from rendering at the intersection.
-            double distCenter = _wayVectors.get(i).getFrom() == 0 ? 0.0 : Utils.getSubPart(rr.getAlignment(), 0, _wayVectors.get(i).getFrom()).getLength();
+            double distCenter = _wayVectors.get(i).getFrom() == 0 ? 0.0 : UtilsSpatial.getSubPart(rr.getAlignment(), 0, _wayVectors.get(i).getFrom()).getLength();
             if (_trimWays) rr.addRenderingGap(distCenter, distances[0]);
 //            new Thread(() -> JOptionPane.showMessageDialog(MainApplication.getMainFrame(),
 //                    "added gap, from " + distCenter + " to " + distances[0] + " on len " + rr.getAlignment().getLength())).start();
@@ -280,12 +318,12 @@ public abstract class IntersectionRenderer {
             // Get curve backbone
             double extension = motorway ? 80 : 25;
             Way backbone = _rightBackbones.get(i) == null || _leftBackbones.get(i) == null ? null
-                    : glue(_rightBackbones.get(i), _leftBackbones.get(i), extension);
+                    : UtilsSpatial.glue(_rightBackbones.get(i), _leftBackbones.get(i), extension);
             double md = Math.PI / 30;
             try {
-                if (Utils.anglesAreWithinAngle(_rightBearings.get(i),
+                if (UtilsSpatial.anglesAreWithinAngle(_rightBearings.get(i),
                         _leftBearings.get(i == _leftBearings.size() - 1 ? 0 : i + 1), md) &&
-                        Utils.anglesAreWithinAngle(_rightBearings.get(i),
+                        UtilsSpatial.anglesAreWithinAngle(_rightBearings.get(i),
                                 _rightPoints.get(i).bearing(_leftPoints.get(i == _leftBearings.size() - 1 ? 0 : i + 1)), md)) {
                     List<Node> straightLineBackbone = new ArrayList<>();
                     straightLineBackbone.add(new Node(_rightPoints.get(i)));
@@ -304,8 +342,8 @@ public abstract class IntersectionRenderer {
 
                     List<Node> newBackBone = new ArrayList<>();
                     newBackBone.add(new Node(_rightPoints.get(i)));
-                    newBackBone.add(new Node(Utils.getLatLonRelative(_rightPoints.get(i), _rightBearings.get(i), distOutBackboneNodes)));
-                    newBackBone.add(new Node(Utils.getLatLonRelative(_leftPoints.get(ipo), _leftBearings.get(ipo), distOutBackboneNodes)));
+                    newBackBone.add(new Node(UtilsSpatial.getLatLonRelative(_rightPoints.get(i), _rightBearings.get(i), distOutBackboneNodes)));
+                    newBackBone.add(new Node(UtilsSpatial.getLatLonRelative(_leftPoints.get(ipo), _leftBearings.get(ipo), distOutBackboneNodes)));
                     newBackBone.add(new Node(_leftPoints.get(ipo)));
                     backbone = new Way();
                     backbone.setNodes(newBackBone);
@@ -325,8 +363,8 @@ public abstract class IntersectionRenderer {
                 int nodesLowRes = 2;
                 List<Node> curve = new ArrayList<>();
                 List<Node> curveLowRes = new ArrayList<>();
-                for (int j = 0; j <= nodes; j++) curve.add(new Node(Utils.bezier(j*1.0/nodes, bezierNodes)));
-                for (int j = 0; j <= nodesLowRes; j++) curveLowRes.add(new Node(Utils.bezier(j*1.0/nodesLowRes, bezierNodes)));
+                for (int j = 0; j <= nodes; j++) curve.add(new Node(UtilsSpatial.bezier(j*1.0/nodes, bezierNodes)));
+                for (int j = 0; j <= nodesLowRes; j++) curveLowRes.add(new Node(UtilsSpatial.bezier(j*1.0/nodesLowRes, bezierNodes)));
 
                 outlineNodes.addAll(curve);
                 lowResOutlineNodes.addAll(curveLowRes);
@@ -335,7 +373,7 @@ public abstract class IntersectionRenderer {
                 // Get parallel line to curve, used for drawing the painted white line at the road edge.
                 Way roadMarking = new Way();
                 roadMarking.setNodes(curve);
-                _roadMarkings.add(Utils.getParallel(roadMarking, -Utils.RENDERING_WIDTH_DIVIDER/2, -Utils.RENDERING_WIDTH_DIVIDER/2,
+                _roadMarkings.add(UtilsSpatial.getParallel(roadMarking, -UtilsRender.RENDERING_WIDTH_DIVIDER/2, -UtilsRender.RENDERING_WIDTH_DIVIDER/2,
                         false, Double.NaN, Double.NaN));
 
             } else {
@@ -361,7 +399,7 @@ public abstract class IntersectionRenderer {
     public void render(Graphics2D g) {
         try {
             // Fill in asphalt.
-            UtilsRender.drawOnMap(g, _mv, _outline, Utils.DEFAULT_ASPHALT_COLOR,
+            UtilsRender.drawOnMap(g, _mv, _outline, UtilsRender.DEFAULT_ASPHALT_COLOR,
                     null, 1, true, false, false);
 
             // Draw road lines:
@@ -383,52 +421,14 @@ public abstract class IntersectionRenderer {
                 meters100PixLastRender = _mv.getDist100Pixel();
             }
             for (Way w : _roadMarkingsSimplified) {
-                UtilsRender.drawOnMap(g, _mv, w, Utils.DEFAULT_UNTAGGED_ROADEDGE_COLOR,
+                UtilsRender.drawOnMap(g, _mv, w, UtilsRender.DEFAULT_UNTAGGED_ROADEDGE_COLOR,
                         null, 0.125F, false, true, simplify);
             }
-
-//        // DRAW PERIMETER
 //
-//        g.setStroke(new BasicStroke(10));
-//        for (int i = 0; i < _backbones.size(); i++) {
-//            if (_backbones.get(i) == null) continue;
-//            g.setColor(i == 0 ? Color.ORANGE : i == 1 ? Color.BLUE : i == 2 ? Color.GREEN : i == 3 ? Color.YELLOW : i == 4 ? Color.CYAN : Color.PINK);
-//            int[] xPoints2 = new int[_backbones.get(i).getNodesCount()];
-//            int[] yPoints2 = new int[xPoints2.length];
-//            for (int j = 0; j < _backbones.get(i).getNodesCount(); j++) {
-//                xPoints2[j] = (int) (_mv.getPoint(_backbones.get(i).getNode(j).getCoor()).getX() + 0.5);
-//                yPoints2[j] = (int) (_mv.getPoint(_backbones.get(i).getNode(j).getCoor()).getY() + 0.5);
+//            for (long nodeid : getNodeIntersections()) {
+//                Way lowresoutline = _m.nodeIntersections.get(nodeid);
+//                UtilsRender.drawOnMap(g, _mv, lowresoutline, Color.RED, null, 1.0F, false, true, false);
 //            }
-//            g.drawPolyline(xPoints2, yPoints2, xPoints2.length);
-//        }
-//
-//        g.setStroke(new BasicStroke(10));
-//        g.setColor(Color.RED);
-//        for (int i = 0; i < _bruh.size(); i++) {
-//            int x = (int) (_mv.getPoint(_bruh.get(i)).getX() + 0.5);
-//            int y = (int) (_mv.getPoint(_bruh.get(i)).getY() + 0.5);
-//            g.drawLine(x, y, x, y);
-//        }
-//
-//            if (_ordering != null) {
-//                g.setColor(Color.RED);
-//                for (int i = 0; i < _ordering.size(); i++) {
-//                    int x = (int) (_mv.getPoint(_ordering.get(i).getCoor()).getX() + 0.5);
-//                    int y = (int) (_mv.getPoint(_ordering.get(i).getCoor()).getY() + 0.5);
-//                    g.drawString(i + "", x, y);
-//                }
-//
-//                g.setColor(Color.GREEN);
-//                for (int i = 0; i < _vertextOrdering.size(); i++) {
-//                    int x = (int) (_mv.getPoint(_vertextOrdering.get(i).getCoor()).getX() + 0.5);
-//                    int y = (int) (_mv.getPoint(_vertextOrdering.get(i).getCoor()).getY() + 0.5);
-//                    g.drawString(i + "", x, y);
-//                }
-//            }
-//
-//            // THESE TWO LINES ARE FOR REMOVING THE WHITE BOX AROUND THE SCREEN... DON'T DELETE THESE
-//            g.setColor(new Color(0, 0, 0, 0));
-//            g.setStroke(GuiHelper.getCustomizedStroke("0"));
         } catch (Exception ignored) {}
     }
 
@@ -457,55 +457,145 @@ public abstract class IntersectionRenderer {
                 }
                 Way parallelSubPartWay = new Way();
                 parallelSubPartWay.setNodes(parallelSubPart);
-                outputWay = outputWay.getNodesCount() == 0 ? parallelSubPartWay : glue(outputWay, parallelSubPartWay, 30);
+                outputWay = outputWay.getNodesCount() == 0 ? parallelSubPartWay : UtilsSpatial.glue(outputWay, parallelSubPartWay, 30);
             }
         }
         return outputWay.getNodes();
     }
 
-    abstract List<List<IntersectionGraphSegment>> getPerimeter();
 
-    abstract LatLon getPos();
 
-    public Way glue(Way a, Way b, double extension) {
-        // Glue first half of a to second half of b.  Split into halves at intersect.
-        double[] distances = new double[2];
-        if (b == null || b.getNodesCount() < 2)return (a == null || a.getNodesCount() < 2) ? null : a;
-        if (a == null || a.getNodesCount() < 2) return b;
-        LatLon intersect = Utils.intersect(Utils.reverseNodes(a), b, distances, false, 0, false, false);
-        double extensionUsed = 0;
-        if (intersect == null) {
-            try {
-                intersect = Utils.intersect(Utils.extendWay(Utils.reverseNodes(a), true, extension),
-                        Utils.extendWay(b, true, extension), distances, false, 0, false, false);
-                extensionUsed = extension;
-            } catch (Exception e) {
-                return null;
+
+    private void explore(Node currentNode, Set<Long> exploredNodes, List<Long> space,
+                         List<IntersectionGraphSegment> exploredWays, List<WayVector> wayVectors, double bearing) {
+        // Explores all wayVectors leading out of a single-node.
+        // Recursive, used to find internal road network.
+        exploredNodes.add(currentNode.getUniqueId());
+        space.remove(currentNode.getUniqueId());
+        List<WayVector> ways = UtilsSpatial.getWaysFromNode(currentNode, _m, bearing);
+        for (WayVector w : ways) {
+            // If this connection has already been explored, quit now.
+            boolean explored = false;
+            for (IntersectionGraphSegment i : exploredWays) {
+                if (i.containsWaySegment(w)) {
+                    explored = true;
+                    break;
+                }
+            }
+            if (explored) continue;
+
+
+            // Explore this segment:
+            WayVector wayVector = w;
+            List<WayVector> routeSoFar = new ArrayList<>();
+            boolean keepgoing = true;
+            double distSoFar = 0;
+
+            while(keepgoing) { // Runs for each way between two nodes of intersection.  Should run just one time in most cases.
+
+                Way way = wayVector.getParent();
+                int dir = wayVector.isForward() ? 1 : -1;
+                int pos = wayVector.getFrom();
+
+                for (int i = pos+dir; dir > 0 ? i < way.getNodesCount() : i >= 0; i += dir) {
+                    distSoFar += way.getNode(i-dir).getCoor().greatCircleDistance(way.getNode(i).getCoor());
+                    if (UtilsSpatial.numRoadsFromNode(way.getNode(i), _m) != 2 || distSoFar > 100) {
+                        routeSoFar.add(new WayVector(pos, i, way));
+                        keepgoing = false;
+                        break;
+                    }
+
+                    if ((dir == -1 && i == 0) || (dir == 1 && i == way.getNodesCount()-1)) {
+                        // Reached end, hop on to other road and continue.
+                        routeSoFar.add(new WayVector(pos, i, way));
+
+                        List<WayVector> allWayVectorsFromHere = UtilsSpatial.getWaysFromNode(way.getNode(i), _m);
+                        wayVector = allWayVectorsFromHere.get(0).getParent().getUniqueId() == way.getUniqueId() ? allWayVectorsFromHere.get(1) : allWayVectorsFromHere.get(0);
+                        break;
+                    }
+                }
+            }
+
+            // If the intersection at the end is part of this intersection, explore out from it.
+            WayVector endVector = routeSoFar.get(routeSoFar.size()-1);
+            Node endNode = endVector.getParent().getNode(endVector.getTo());
+            Node endNodeRen = null;
+            boolean isPart = false;
+            boolean nodeExplored = exploredNodes.contains(endNode.getUniqueId());
+            for (Long nodeId : _nodeIds) {
+                Node n = (Node) MainApplication.getLayerManager().getEditDataSet().getPrimitiveById(nodeId, OsmPrimitiveType.NODE);
+                if (endNode.getUniqueId() == n.getUniqueId()) {
+                    isPart = true;
+                    endNodeRen = n;
+                    break;
+                }
+            }
+
+            // Mark as explored:
+            if (nodeExplored) exploredWays.add(new IntersectionGraphSegment(routeSoFar));
+            if (isPart && !nodeExplored && !routeSoFar.get(0).getParent().hasTag("in_a_junction", "no")) {
+                double thisBearing = endVector.getParent().getNode(endVector.getTo()).getCoor().bearing(
+                        endVector.getParent().getNode(endVector.getTo() + (endVector.isForward() ? -1 : 1)).getCoor());
+                explore(endNodeRen, exploredNodes, space, exploredWays, wayVectors, thisBearing);
+            } else if (!nodeExplored) {
+                wayVectors.add(w);
+            }
+            if (isPart) {
+                _toBeTrimmed.addAll(routeSoFar);
             }
         }
-//        if (intersect == null) {
-//            _bruh.add(Utils.extendWay(Utils.reverseNodes(a), true, extension));
-//            _bruh.add(Utils.extendWay(b, true, extension));
-//            throw new RuntimeException("bro");
-//        }
-        List<Node> nodes = new ArrayList<>();
-        Way output = new Way();
-
-        Way firstHalfA = Utils.getSubPart(a, 0.0, a.getLength() + extensionUsed - distances[0]);
-        Way secondHalfB = Utils.getSubPart(b, distances[1]-extensionUsed, b.getLength());
-
-        if (intersect == null || firstHalfA == null || secondHalfB == null) {
-            nodes.addAll(a.getNodes());
-            nodes.addAll(b.getNodes());
-        } else {
-            nodes.addAll(firstHalfA.getNodes());
-            if (firstHalfA.getNodesCount() != 0 && secondHalfB.getNodesCount() != 0) nodes.remove(nodes.size()-1);
-            nodes.addAll(secondHalfB.getNodes());
-        }
-
-        output.setNodes(nodes);
-        return output;
     }
+
+
+    public List<List<IntersectionGraphSegment>> getPerimeter() {
+        List<List<IntersectionGraphSegment>> out = new ArrayList<>();
+        for (int i = 0; i < _wayVectors.size(); i++) {
+            // Start marching around the edge:
+            Node n = _wayVectors.get(i).getParent().getNode(_wayVectors.get(i).getFrom());
+            WayVector w = _wayVectors.get(i);
+            List<IntersectionGraphSegment> segments = new ArrayList<>();
+            for(int dontuse = 0; dontuse < 10; dontuse++) { // This loop should run two times 99% of the time, 3 times 0.99% of the time, 4 times 0.01% of the time.  Used to get to next wayVector.
+                // Rotate around this node:
+                double bearing = w.getParent().getNode(w.getFrom()).getCoor().bearing(w.getParent().getNode(w.getFrom() + (w.isForward() ? 1 : -1)).getCoor());
+                List<WayVector> vectors = UtilsSpatial.getWaysFromNode(n, _m, bearing);
+                WayVector x = vectors.get(0);
+                WayVector next = _wayVectors.get(i == _wayVectors.size()-1 ? 0 : i+1);
+                if (next.contains(x)) break;
+
+                // Go to next node:
+                // Get graph segment that contains x:
+                IntersectionGraphSegment g = null;
+                for (IntersectionGraphSegment s : _internalGraph) {
+                    if (s.containsWaySegment(x)) {
+                        g = s;
+                        break;
+                    }
+                }
+                if (g == null) {
+                    segments = new ArrayList<>();
+                    break;
+                }
+                g = g.nodeIsStart(n) ? g : g.reverse();
+                segments.add(g);
+
+                // Get correct endpoint:
+                n = g.getEndpointNot(n);
+                w = g.getEndTwoNodes();
+            }
+            out.add(segments);
+        }
+        return out;
+    }
+
+    public List<WayVector> waysClockwiseOrder() {
+        return _wayVectors;
+    }
+
+    public LatLon getPos() {
+        return _pos;
+    }
+
+    public List<Long> getNodeIntersections() { return _nodeIds; }
 
 }
 

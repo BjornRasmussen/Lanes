@@ -4,10 +4,7 @@ import org.openstreetmap.josm.data.coor.LatLon;
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
-import org.openstreetmap.josm.gui.util.GuiHelper;
 
-import java.awt.*;
-import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,7 +26,7 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
     // <editor-fold defaultstate="collapsed" desc="Constructors">
 
     public NodeIntersectionRenderer(Node n, MapView mv, LaneMappingMode m) {
-        super(mv, m);
+        super(null, null, mv, m);
         _node = n;
         _trimWays = false; // Only multi intersections do this.
         createIntersectionLayout();
@@ -39,7 +36,7 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
 
     @Override
     public List<WayVector> waysClockwiseOrder() {
-        return Utils.getWaysFromNode(_node, _m);
+        return UtilsSpatial.getWaysFromNode(_node, _m);
     }
 
     @Override
@@ -55,7 +52,7 @@ public class NodeIntersectionRenderer extends IntersectionRenderer {
     }
 
     public Way getOutline() {
-        return _outline;
+        return UtilsSpatial.lowResOutline(getNode(), _m);
     }
 
     public Way getLowResOutline() { return _lowResOutline; }

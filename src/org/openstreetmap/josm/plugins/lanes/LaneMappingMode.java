@@ -1,10 +1,15 @@
 package org.openstreetmap.josm.plugins.lanes;
 
+import static org.openstreetmap.josm.gui.DownloadParamType.fileName;
 import static org.openstreetmap.josm.tools.I18n.tr;
 
 import java.awt.*;
 import java.awt.event.*;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -29,7 +34,7 @@ import org.openstreetmap.josm.tools.Shortcut;
 import javax.swing.event.ChangeListener;
 
 /*
- * Lane-Mapping Map Mode - allows for the lanes of highways to be viewed and edited directly on the map.
+ * LaneMapping Map Mode - allows for the lanes of highways to be viewed and edited directly on the map.
  *
  * -> The LanesPlugin class is only run when JOSM boots up.
  * -> This class is for entering the lane mapping mode and handling all of the rendered roads.
@@ -53,7 +58,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
     private List<ChangeListener> _modeExited; // For closing pop-ups when Lane editing mode is left.
     private List<ActionListener> _dataChanged; // For updating the lane diagram on the popups.
 
-    // Listeners (stored here so they can be removed on exit)
+    // Listeners (stored here, so they can be removed on exit)
     private MouseListener _ml;
     private UndoRedoHandler.CommandQueuePreciseListener _cqpl;
     private DataSetListener _dsl;
@@ -64,19 +69,26 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
     // which is way faster.
     private int mapChangeTolerance = 0;
 
+    public Map<Long, Way> nodeIntersections;// Temp to allow rendering of these areas.
 
-    public LaneMappingMode() {
-        super(tr("Lane Editing"), "laneconnectivity.png", tr("Activate lane editing mode"),
-                Shortcut.registerShortcut("mapmode:lanemapping", tr("Mode: {0}",
-                tr("Lane Editing Mode")), KeyEvent.VK_2, Shortcut.SHIFT),
+    public enum Mode {ROAD, INTERSECTION}
+
+    private Mode _mode;
+
+
+    public LaneMappingMode(Mode mode) {
+        super(tr(mode == Mode.ROAD? "Lane Editing" : "Intersection Editing"), mode == Mode.ROAD ? "laneconnectivity.png" : "intersectionmode.png",
+                tr(mode == Mode.ROAD ? "Activate lane editing mode" : "Activate intersection mode"),
+                Shortcut.registerShortcut(mode == Mode.ROAD ? "mapmode:lanemapping" : "mapmode:intersectionmapping", tr("Mode: {0}",
+                tr(mode == Mode.ROAD ? "Lane Editing Mode" : "Intersection Editing Mode")), mode == Mode.ROAD ? KeyEvent.VK_2 : KeyEvent.VK_3, Shortcut.SHIFT),
                 Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+        _mode = mode;
+        _roads = null;
     }
 
     @Override
     public void enterMode() {
         super.enterMode();
-
-        // Force regeneration of all roads and intersections.
         _roads = null;
 
         // Adding this as a temporary layer is what makes drawing on top of everything else possible.
@@ -192,8 +204,26 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         _modeExited = new ArrayList<>();
         _dataChanged = new ArrayList<>();
 
-        // I don't think this is needed, but I might add some status line stuff later, so who knows.
+        // I don't think this is needed but adding this doesn't hurt.
         updateStatusLine();
+
+//        // ML TRAINING PROJECT:
+//        try {
+//            FileWriter fileWriter = new FileWriter("mlpoints.txt");
+//            PrintWriter printWriter = new PrintWriter(fileWriter);
+//            Collection<Node> nodes = MainApplication.getLayerManager().getEditDataSet().getNodes();
+//            for (Node n : nodes) {
+//                if (!n.hasTag("trees")) { continue; }
+//                String isTree = "0";
+//                if (n.hasTag("trees", "yes")) {
+//                    isTree = "1";
+//                }
+//                fileWriter.write(n.lat() + "," + n.lon() + "," + isTree + "\n");
+//            }
+//            printWriter.close();
+//        } catch (IOException e) {
+//            System.out.println("fail " + e.getMessage());
+//        }
     }
 
     @Override
@@ -277,12 +307,12 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
 
     // </editor-fold>
 
-    // <editor-fold defaultstate="collapsed" desc="Methods for Building RoadSegmentRenderers">
+    // <editor-fold defaultstate="collapsed" desc="Methods for Building Renderers">
 
     private void ensureRoadSegmentsNotNull() {
         if (_roads == null || _intersections == null) {
             _roads = getAllRoadRenderers(new ArrayList<>(MainApplication.getLayerManager().getEditDataSet().getWays()), _mv);
-            _intersections = getAllIntersections(_mv);
+            _intersections = _mode == Mode.INTERSECTION ? getAllIntersections(_mv) : new ArrayList<>();
         }
     }
 
@@ -318,7 +348,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         for (RoadRenderer rr : output) {
             Runnable r = () -> {
                 try {
-                    rr.updateAlignment(); // updates alignment based on nearby ways.
+                    rr.updateEndAngles(); // updates alignment based on nearby ways.
                 } catch (Exception ignored) {}
             };
             executor.execute(r);
@@ -336,11 +366,20 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
      * @return The created list of IntersectionRenderers.
      */
     private List<IntersectionRenderer> getAllIntersections(MapView mv) {
+//        try {
+
+        // NEW METHOD:
+        // * Find list of nodes that should be intersections.
+        // * Create really basic outline for each one, preferring efficiency over beauty.
+        // * Find overlapping outlines, and create a list of groups, each containing a bunch of intersections that overlap.
+        // * Generate intersectionRenderers based on those outlines.
 
         // Get all node-only intersections.
-        nodeIdToISR = new Hashtable<>();
         Set<Long> handled = new HashSet();
-        List<NodeIntersectionRenderer> intersections = new Vector<>();
+        List<Way> outlines = new Vector<>();
+        List<Long> nodeIds = new Vector<>();
+        nodeIntersections = new HashMap<>();
+//        List<NodeIntersectionRenderer> intersections = new Vector<>();
         if (_roads == null) throw new RuntimeException("RoadRenderers not initialized before calling getAllIntersections().");
 
 
@@ -351,12 +390,9 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
                 if (!handled.contains(n.getUniqueId())) {
                     handled.add(n.getUniqueId());
                     executor.execute(() -> {
-                        if (!Utils.nodeShouldBeIntersection(n, this)) return;
-//                        try {
-                            NodeIntersectionRenderer newest = new NodeIntersectionRenderer(n, mv, this);
-                            intersections.add(newest);
-                            nodeIdToISR.put(n.getUniqueId(), newest);
-//                        } catch (Exception ignored) {}
+                        if (UtilsSpatial.nodeShouldBeIntersection(n, this)) {
+                            nodeIntersections.put(n.getUniqueId(), UtilsSpatial.lowResOutline(n, this));
+                        }
                     });
                 }
             }
@@ -365,20 +401,22 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         executor.shutdown();
         try { executor.awaitTermination(60, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
 
-        intersections.sort(Comparator.comparingDouble(o -> o.getPos().lat()));
+        List<Long> ids = new ArrayList<>();
+        ids.addAll(nodeIntersections.keySet());
+        ids.sort(Comparator.comparingDouble(o -> nodeIntersections.get(o).getNode(0).lat()));
 
 
         // Merge overlapping node-only intersections.
-        int[] groups = new int[intersections.size()];
+        int[] groups = new int[ids.size()];
         int max = 0;
         int[] thisGroup = new int[100]; // Max num of existing separate intersections this node intersection can be merged with. Max real world is usually like 3.
-        for (int i = 1; i < intersections.size(); i++) {
+        for (int i = 1; i < ids.size(); i++) {
             int num = 0;
             // Go back along i until an intersect is found:
-            // Max diff in lat is 0.001.
+            // Max diff in lat is 0.0005.
             for (int j = i-1; j >= 0; j--) {
-                if (Math.abs(intersections.get(j).getPos().lat()-intersections.get(i).getPos().lat()) > 0.0005) break; // Don't try to connect two intersections that are more than ~150 ft apart.
-                if (sameIntersection(intersections.get(j), intersections.get(i))) {
+                if (Math.abs(nodeIntersections.get(ids.get(j)).getNode(0).lat()-nodeIntersections.get(ids.get(i)).getNode(0).lat()) > 0.0005) break; // Don't try to connect two intersections that are more than ~150 ft apart.
+                if (sameIntersection(nodeIntersections.get(ids.get(j)), nodeIntersections.get(ids.get(i)))) {
                     thisGroup[num] = groups[j];
                     num++;
                 }
@@ -403,19 +441,19 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
             }
         }
 
-        List<NodeIntersectionRenderer>[] multiNodeCollections = new List[max+1];
-        for (int i = 0; i < intersections.size(); i++) {
+        List<Long>[] multiNodeCollections = new List[max+1];
+        for (int i = 0; i < ids.size(); i++) {
             if (multiNodeCollections[groups[i]] == null) multiNodeCollections[groups[i]] = new ArrayList<>();
-            multiNodeCollections[groups[i]].add(intersections.get(i));
+            multiNodeCollections[groups[i]].add(ids.get(i));
         }
 
         List<IntersectionRenderer> out = new Vector<>();
         executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
-        for (List<NodeIntersectionRenderer> group : multiNodeCollections) {
+        for (List<Long> group : multiNodeCollections) {
             if (group != null) {
                 executor.execute(() -> {
                     try {
-                        new MultiIntersectionRenderer(group, out);
+                        new IntersectionRenderer(group, out, _mv, this);
                     } catch (Exception ignored) {}
                 });
             }
@@ -426,16 +464,18 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
 
         nodeIdToISR = new HashMap<>();
 
-        for (IntersectionRenderer m : out) for (long l : ((MultiIntersectionRenderer) m).getNodeIntersections()) nodeIdToISR.put(l, m);
+        for (IntersectionRenderer m : out) {
+            for (long l : m.getNodeIntersections()) {
+                nodeIdToISR.put(l, m);
+            }
+        }
 
         return out;
     }
 
-    private boolean sameIntersection(NodeIntersectionRenderer a, NodeIntersectionRenderer b) {
-        if (a.getPos().greatCircleDistance(b.getPos()) > 100) return false;
-        if (a.getPos().greatCircleDistance(b.getPos()) < 15) return true;
-        if (Utils.intersect(a._lowResOutline, b._lowResOutline, new double[2], false, 0, false, false) == null) return false;
-        return true;
+    private boolean sameIntersection(Way outlineA, Way outlineB) {
+        return UtilsSpatial.intersect(outlineA, outlineB, new double[2], false,
+                0, false, false) != null;
     }
 
     /**
@@ -486,7 +526,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         if (mapChangeTolerance >= 0) return;
         mapChangeTolerance = 0;
 
-        // Set roads and intersections to null to force update, then ensure road segments aren't null.
+        // Set roads and intersections to null to force update, then ensure road segments aren't to finish the job.
         _roads = null;
         _intersections = null;
         ensureRoadSegmentsNotNull();
@@ -504,7 +544,6 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
      */
     public void updateOneRoad(long uniqueID) {
         Way w = wayIdToRSR.get(uniqueID).getWay();
-//        for (Way way : _ways) if (way.getUniqueId() == uniqueID) w = way; TODO delete this if no problems arise from using method above instead.
         if (w == null || !wayIdToRSR.containsKey(uniqueID)) { // Way deleted/never existed, use slow method instead.
             mapChangeTolerance = 0;
             updateDataset();
@@ -517,7 +556,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
             _roads.remove(wayIdToRSR.get(uniqueID));
             wayIdToRSR.put(uniqueID, replacementRR);
             _roads.add(replacementRR);
-            replacementRR.updateAlignment();
+            replacementRR.updateEndAngles();
         }
 
         // Find all nearby intersections and roads.
@@ -560,7 +599,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
         RoadRenderer min = null;
         for (RoadRenderer r : _roads) {
             try {
-                if (Utils.mouseEventIsInside(e, r.getAsphaltOutlinePixels(), _mv) && (min == null || r.getWay().getLength() < min.getWay().getLength())) {
+                if (UtilsClicksAndPopups.mouseEventIsInside(e, r.getAsphaltOutlinePixels(), _mv) && (min == null || r.getWay().getLength() < min.getWay().getLength())) {
                     min = r;
                 }
             } catch (Exception ignored) {} // When the alignment is invalid, aka it goes from 0 to 21 lanes wide in 10 meters, this catches the exception.

@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.List;
 
 /*
- * Lane - stores information about a single lane in a MarkedRoadRenderer.
+ * RoadPieceLane - stores information about a single lane in a RoadRendererMarked.
  *
  * -> The LanesPlugin class is only run when JOSM boots up.
  * -> This class is for entering the lane mapping mode and handling all of the rendered roads.
@@ -20,19 +20,19 @@ import java.util.List;
  * This class stores a list of RoadRenderers, and calls on each of them each time paint() is called.
  */
 
-public class Lane extends RoadPiece {
+public class RoadPieceLane extends RoadPiece {
 
     private String change = null;
     private double startWidthMultiplier = 1;
     private double endWidthMultiplier = 1;
 
-    public Lane(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
+    public RoadPieceLane(int direction, int position, MapView mv, RoadRendererMarked parent) {
         super(direction, position, mv, parent);
     }
 
     @Override
     public double getWidth(boolean start) {
-        return getWidthTagged(start) + (_direction == 0 ? 1 : -1) * Utils.RENDERING_WIDTH_DIVIDER;
+        return getWidthTagged(start) + (_direction == 0 ? 1 : -1) * UtilsRender.RENDERING_WIDTH_DIVIDER;
     }
 
     @Override
@@ -43,7 +43,7 @@ public class Lane extends RoadPiece {
         if (widthTag != null && widthTag.equals("")) widthTag = null;
 
         try {
-            width = Utils.parseWidth(widthTag);
+            width = UtilsGeneral.parseWidth(widthTag);
         } catch (Exception e) {
             widthTag = null;
         }
@@ -51,7 +51,7 @@ public class Lane extends RoadPiece {
         if (Double.isNaN(width)) widthTag = null;
 
         if (widthTag == null) {
-            width = isBikeLane() ? Utils.WIDTH_BIKE_LANES : Utils.WIDTH_LANES;
+            width = isBikeLane() ? UtilsRender.WIDTH_BIKE_LANES : UtilsRender.WIDTH_LANES;
         }
 
         return width*(start ? startWidthMultiplier : endWidthMultiplier);
@@ -60,10 +60,18 @@ public class Lane extends RoadPiece {
     @Override
     public void render(Graphics2D g) {
         if (_direction == 0) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false),
+            UtilsRender.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false),
                     _offsetStart, _offsetEnd, DividerType.CENTRE_LANE, Color.YELLOW, false);
         }
-        renderTurnMarkings(g);
+        // Get images to render:
+        List<Image> images = new ArrayList<>();
+        images.add(UtilsRender.bus);
+        renderTurnMarkings(g, images, true, UtilsRender.DIST_TO_FIRST_TURN, UtilsRender.DIST_BETWEEN_TURNS);
+//        renderTurnMarkings(g);
+    }
+
+    private void renderRoadSymbols(Graphics2D g) {
+
     }
 
     @Override
@@ -71,9 +79,9 @@ public class Lane extends RoadPiece {
         if (_direction == 0) {
             double offsetStart = _offsetStart-(_parent._offsetToLeftStart - _parent.getWidth(true)/2);
             double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - _parent.getWidth(false)/2);
-            Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
-            Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_LANE, Color.YELLOW);
+            Point lineStart = UtilsRender.goInDirection(UtilsRender.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
+            Point lineEnd = UtilsRender.goInDirection(UtilsRender.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
+            UtilsRender.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_LANE, Color.YELLOW);
         }
     }
 
@@ -104,7 +112,7 @@ public class Lane extends RoadPiece {
                 if (splitPos(_way.get(a + ":forward"), _position).equals(b)) {
                     return true;
                 }
-            } else if (Utils.isOneway(_way) && _way.hasTag(a)) {
+            } else if (UtilsGeneral.isOneway(_way) && _way.hasTag(a)) {
                 if (splitPos(_way.get(a), _position).equals(b)) {
                     return true;
                 }
@@ -128,7 +136,7 @@ public class Lane extends RoadPiece {
                 if (_way.hasTag("change:lanes:forward")) {
                     output = splitPos(_way.get("change:lanes:forward"), _position);
                 }
-                if (_way.hasTag("change:lanes") && Utils.isOneway(_way)) {
+                if (_way.hasTag("change:lanes") && UtilsGeneral.isOneway(_way)) {
                     output = splitPos(_way.get("change:lanes"), _position);
                 }
                 if (_way.hasTag("change:forward")) {
@@ -179,7 +187,7 @@ public class Lane extends RoadPiece {
                 if (_way.hasTag("turn:lanes:forward")) {
                     return splitPos(_way.get("turn:lanes:forward"), _position);
                 }
-                if (_way.hasTag("turn:lanes") && Utils.isOneway(_way)) {
+                if (_way.hasTag("turn:lanes") && UtilsGeneral.isOneway(_way)) {
                     return splitPos(_way.get("turn:lanes"), _position);
                 }
                 if (_way.hasTag("turn:forward")) {
@@ -227,13 +235,13 @@ public class Lane extends RoadPiece {
                 output = splitPos(_way.get("width:lanes:forward"), _position);
             }
 
-            if (output.equals("") && start && _way.hasTag("width:lanes:start") && Utils.isOneway(_way)) {
+            if (output.equals("") && start && _way.hasTag("width:lanes:start") && UtilsGeneral.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes:start"), _position);
             }
-            if (output.equals("") && !start && _way.hasTag("width:lanes:end") && Utils.isOneway(_way)) {
+            if (output.equals("") && !start && _way.hasTag("width:lanes:end") && UtilsGeneral.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes:end"), _position);
             }
-            if (output.equals("") && _way.hasTag("width:lanes") && Utils.isOneway(_way)) {
+            if (output.equals("") && _way.hasTag("width:lanes") && UtilsGeneral.isOneway(_way)) {
                 output = splitPos(_way.get("width:lanes"), _position);
             }
         } else if (_direction == -1) {
@@ -275,7 +283,7 @@ public class Lane extends RoadPiece {
         return output.toString();
     }
 
-    private void renderTurnMarkings(Graphics2D g) {
+    private void renderTurnMarkings(Graphics2D g, List<Image> images, boolean overlapImages, double distToFirstMarking, double distBetweenMarkings) {
         if (_mv.getScale() > 0.5) return; // Don't render turn lane markings when the map is too zoomed out
 
         try {
@@ -296,16 +304,17 @@ public class Lane extends RoadPiece {
 
                 int numDrawn = 0;
                 double distSoFar = 0;
-                Way lanePos = Utils.getParallel(parentAlignment, offsetStart, offsetEnd, false,
+                Way lanePos = UtilsSpatial.getParallel(parentAlignment, offsetStart, offsetEnd, false,
                         h==0 ? _parent.otherStartAngle : Double.NaN,
                         h==_parent.getAlignments().size()-1 ? _parent.otherEndAngle : Double.NaN);
+
                 for (int i = 0; i < lanePos.getNodesCount() - 1; i++) {
                     double distThisTime = lanePos.getNode(i).getCoor().greatCircleDistance(lanePos.getNode(i + 1).getCoor());
                     double angle = lanePos.getNode(i).getCoor().bearing(lanePos.getNode(i + 1).getCoor());
                     if (_direction == -1) angle += Math.PI;
 
-                    if (_direction != 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn)) {
-                        double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
+                    if (_direction != 0 && distSoFar + distThisTime > UtilsRender.DIST_TO_FIRST_TURN + UtilsRender.DIST_BETWEEN_TURNS * (numDrawn)) {
+                        double distIntoSegment = UtilsRender.DIST_TO_FIRST_TURN + UtilsRender.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
                         double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
                         LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
                                 lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
@@ -317,16 +326,16 @@ public class Lane extends RoadPiece {
                         i--;
                         numDrawn++;
                     }
-                    if (_direction == 0 && distSoFar + distThisTime > Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) &&
-                            distSoFar + distThisTime - Utils.DIST_TO_FIRST_TURN - (Utils.DIST_BETWEEN_TURNS * (numDrawn)) > 5) {
-                        double distIntoSegment = Utils.DIST_TO_FIRST_TURN + Utils.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
+                    if (_direction == 0 && distSoFar + distThisTime > UtilsRender.DIST_TO_FIRST_TURN + UtilsRender.DIST_BETWEEN_TURNS * (numDrawn) &&
+                            distSoFar + distThisTime - UtilsRender.DIST_TO_FIRST_TURN - (UtilsRender.DIST_BETWEEN_TURNS * (numDrawn)) > 5) {
+                        double distIntoSegment = UtilsRender.DIST_TO_FIRST_TURN + UtilsRender.DIST_BETWEEN_TURNS * (numDrawn) - distSoFar;
                         double portionFirst = (distThisTime - distIntoSegment) / distThisTime;
                         double portionStart = (distSoFar + distIntoSegment) / _way.getLength();
-                        double width = widthEnd * portionStart + widthStart * (1 - portionStart) - Utils.RENDERING_WIDTH_DIVIDER * 2;
+                        double width = widthEnd * portionStart + widthStart * (1 - portionStart) - UtilsRender.RENDERING_WIDTH_DIVIDER * 2;
                         LatLon pos = new LatLon(lanePos.getNode(i).lat() * portionFirst + (lanePos.getNode(i + 1).lat() * (1 - portionFirst)),
                                 lanePos.getNode(i).lon() * portionFirst + (lanePos.getNode(i + 1).lon() * (1 - portionFirst)));
-                        LatLon posBack = Utils.getLatLonRelative(pos, angle + Math.PI, 0.67 * width);
-                        LatLon posFront = Utils.getLatLonRelative(pos, angle, 0.67 * width);
+                        LatLon posBack = UtilsSpatial.getLatLonRelative(pos, angle + Math.PI, 0.67 * width);
+                        LatLon posFront = UtilsSpatial.getLatLonRelative(pos, angle, 0.67 * width);
                         Point pointBack = _mv.getPoint(posBack);
                         Point pointFront = _mv.getPoint(posFront);
                         drawTurnMarkingsAt(turn, g, pointBack.x, pointBack.y, width, angle);
@@ -355,15 +364,15 @@ public class Lane extends RoadPiece {
         List<String> turns = new ArrayList<>();
         Collections.addAll(turns, turn.split(";"));
         boolean lr = _mv.getScale() > 0.2;
-        if (turns.contains("left")) drawImageAt(g, lr ? Utils.lr_left : Utils.left, x, y, width, rotationRadians);
-        if (turns.contains("right")) drawImageAt(g, lr ? Utils.lr_right : Utils.right, x, y, width, rotationRadians);
-        if (turns.contains("slight_left")) drawImageAt(g, lr ? Utils.lr_slightLeft : Utils.slightLeft, x, y, width, rotationRadians);
-        if (turns.contains("slight_right")) drawImageAt(g, lr ? Utils.lr_slightRight : Utils.slightRight, x, y, width, rotationRadians);
-        if (turns.contains("through")) drawImageAt(g, lr ? Utils.lr_through : Utils.through, x, y, width, rotationRadians);
-        if (turns.contains("merge_to_left")) drawImageAt(g, lr ? Utils.lr_mergeLeft : Utils.mergeLeft, x, y, width, rotationRadians);
-        if (turns.contains("merge_to_right")) drawImageAt(g, lr ? Utils.lr_mergeRight : Utils.mergeRight, x, y, width, rotationRadians);
-        if (turns.contains("reverse")) drawImageAt(g, Utils.isRightHand(_way) ? (lr ? Utils.lr_uTurnLeft : Utils.uTurnLeft) :
-                (lr ? Utils.lr_uTurnRight : Utils.uTurnRight), x, y, width, rotationRadians);
+        if (turns.contains("left")) drawImageAt(g, lr ? UtilsRender.lr_left : UtilsRender.left, x, y, width, rotationRadians);
+        if (turns.contains("right")) drawImageAt(g, lr ? UtilsRender.lr_right : UtilsRender.right, x, y, width, rotationRadians);
+        if (turns.contains("slight_left")) drawImageAt(g, lr ? UtilsRender.lr_slightLeft : UtilsRender.slightLeft, x, y, width, rotationRadians);
+        if (turns.contains("slight_right")) drawImageAt(g, lr ? UtilsRender.lr_slightRight : UtilsRender.slightRight, x, y, width, rotationRadians);
+        if (turns.contains("through")) drawImageAt(g, lr ? UtilsRender.lr_through : UtilsRender.through, x, y, width, rotationRadians);
+        if (turns.contains("merge_to_left")) drawImageAt(g, lr ? UtilsRender.lr_mergeLeft : UtilsRender.mergeLeft, x, y, width, rotationRadians);
+        if (turns.contains("merge_to_right")) drawImageAt(g, lr ? UtilsRender.lr_mergeRight : UtilsRender.mergeRight, x, y, width, rotationRadians);
+        if (turns.contains("reverse")) drawImageAt(g, UtilsGeneral.isRightHand(_way) ? (lr ? UtilsRender.lr_uTurnLeft : UtilsRender.uTurnLeft) :
+                (lr ? UtilsRender.lr_uTurnRight : UtilsRender.uTurnRight), x, y, width, rotationRadians);
     }
 
     private void drawImageAt(Graphics2D g, Image image, int x, int y, double width, double rotationRadians) {
@@ -387,4 +396,9 @@ public class Lane extends RoadPiece {
         // Return the buffered image
         return bimage;
     }
+}
+
+class ImageRenderLocation {
+    public LatLon loc;
+    public double bearing;
 }

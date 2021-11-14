@@ -20,13 +20,13 @@ abstract class RoadPiece {
 
     protected MapView _mv;
     protected Way _way;
-    protected MarkedRoadRenderer _parent;
+    protected RoadRendererMarked _parent;
 
     protected RoadPiece _left = null;
     protected RoadPiece _right = null;
 
 
-    protected RoadPiece(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
+    protected RoadPiece(int direction, int position, MapView mv, RoadRendererMarked parent) {
         _direction = direction;
         _position = position;
         _mv = mv;
@@ -78,10 +78,10 @@ abstract class RoadPiece {
             double startOffset = swt*_offsetEnd + (1-swt)*_offsetStart;
             double endOffset = ewt*_offsetEnd + (1-ewt)*_offsetStart;
 
-            Way subpart = Utils.getSubPart(_parent.getAlignment(), _parent.segmentStartPoints.get(i), _parent.segmentEndPoints.get(i));
-            Way left = Utils.getParallel(subpart, startOffset + (widthStart / 2.0), endOffset + (widthEnd / 2.0),
+            Way subpart = UtilsSpatial.getSubPart(_parent.getAlignment(), _parent.segmentStartPoints.get(i), _parent.segmentEndPoints.get(i));
+            Way left = UtilsSpatial.getParallel(subpart, startOffset + (widthStart / 2.0), endOffset + (widthEnd / 2.0),
                     false, _parent.otherStartAngle, _parent.otherEndAngle);
-            Way right = Utils.getParallel(subpart, startOffset - (widthStart / 2.0), endOffset - (widthEnd / 2.0),
+            Way right = UtilsSpatial.getParallel(subpart, startOffset - (widthStart / 2.0), endOffset - (widthEnd / 2.0),
                     false, _parent.otherStartAngle, _parent.otherEndAngle);
             List<Node> outline = new ArrayList<>();
 
@@ -92,7 +92,7 @@ abstract class RoadPiece {
             outline.add(left.getNode(0));
             Way outlineWay = new Way();
             outlineWay.setNodes(outline);
-            output.add(Utils.wayToPolygon(outlineWay, _mv));
+            output.add(UtilsRender.wayToPolygon(outlineWay, _mv));
         }
         return output;
     }
@@ -102,7 +102,7 @@ abstract class RoadPiece {
     public void mouseClicked(MouseEvent e) {
         if (!SwingUtilities.isLeftMouseButton(e)) return;
 
-        Utils.displayPopup(getPopupContent(), e, _mv, _way, _parent._parent);
+        UtilsClicksAndPopups.displayPopup(getPopupContent(), e, _mv, _way, _parent._parent);
     }
 
     protected JPanel getPopupContent() {
@@ -110,7 +110,7 @@ abstract class RoadPiece {
     }
 
     private String pieceID() {
-        return _way.getId() + " " + _direction + " " + _position + (this instanceof Lane ? "l" : this instanceof Divider ? "d" : "o");
+        return _way.getId() + " " + _direction + " " + _position + (this instanceof RoadPieceLane ? "l" : this instanceof RoadPieceDivider ? "d" : "o");
     }
 
     // </editor-fold>

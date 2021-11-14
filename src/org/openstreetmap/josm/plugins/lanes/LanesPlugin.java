@@ -20,7 +20,8 @@ public class LanesPlugin extends Plugin {
     @Override
     public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
         if (oldFrame == null && newFrame != null) {
-            MainApplication.getMap().addMapMode(new IconToggleButton(new LaneMappingMode()));
+            MainApplication.getMap().addMapMode(new IconToggleButton(new LaneMappingMode(LaneMappingMode.Mode.ROAD)));
+            MainApplication.getMap().addMapMode(new IconToggleButton(new LaneMappingMode(LaneMappingMode.Mode.INTERSECTION)));
         }
     }
 }

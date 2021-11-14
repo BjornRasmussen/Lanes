@@ -12,29 +12,29 @@ import java.awt.event.MouseListener;
 import java.util.List;
 
 /*
- * Divider - stores information about a divider between two lanes in a MarkedRoadRenderer.
+ * RoadPieceDivider - stores information about a divider between two lanes in a RoadRendererMarked.
  *
  * -> Renders and edits dividers.
  * -> Handles most of the work surrounding change:lanes tagging.
  */
 
-public class Divider extends RoadPiece {
+public class RoadPieceDivider extends RoadPiece {
     DividerType _type = null;
 
-    public Divider(int direction, int position, MapView mv, MarkedRoadRenderer parent) {
+    public RoadPieceDivider(int direction, int position, MapView mv, RoadRendererMarked parent) {
         super(direction, position, mv, parent);
     }
 
     @Override
     public double getWidth(boolean start) {
         // Returns width of rendered component, not actual divider.
-        return getWidthTagged(start) + Utils.RENDERING_WIDTH_DIVIDER;
+        return getWidthTagged(start) + UtilsRender.RENDERING_WIDTH_DIVIDER;
     }
 
     @Override
     public double getWidthTagged(boolean start) {
         // Returns width of divider, not rendered component.
-        double output = Utils.parseWidth(widthTag(start));
+        double output = UtilsGeneral.parseWidth(widthTag(start));
         if (Double.isNaN(output)) output = 0;
         return output;
     }
@@ -85,17 +85,17 @@ public class Divider extends RoadPiece {
     public void render(Graphics2D g) {
         if (_mv.getScale() > 4) return; // Don't render when the map is too zoomed out
 
-        if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                    getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW, false);
+        if (_direction == 0 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                    getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW, false);
         }
-        else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                    getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE, false);
+        else if (_direction == 1 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                    getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE, false);
         }
-        else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                    getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE, false);
+        else if (_direction == -1 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                    getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE, false);
         }
         else {
             if (_type == null) getDividerType();
@@ -104,7 +104,7 @@ public class Divider extends RoadPiece {
                 if (_type == DividerType.DASHED_FOR_RIGHT) type = DividerType.DASHED_FOR_LEFT;
                 if (_type == DividerType.DASHED_FOR_LEFT) type = DividerType.DASHED_FOR_RIGHT;
             }
-            Utils.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE, false);
+            UtilsRender.renderRoadLine(g, _mv, _parent, getWidth(true), getWidth(false), _offsetStart, _offsetEnd, type, _direction == 0 ? Color.YELLOW : Color.WHITE, false);
         }
     }
 
@@ -113,20 +113,20 @@ public class Divider extends RoadPiece {
         double offsetStart = _offsetStart-(_parent._offsetToLeftStart - _parent.getWidth(true)/2);
         double offsetEnd = _offsetEnd-(_parent._offsetToLeftEnd - _parent.getWidth(false)/2);
 
-        Point lineStart = Utils.goInDirection(Utils.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
-        Point lineEnd = Utils.goInDirection(Utils.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
+        Point lineStart = UtilsRender.goInDirection(UtilsRender.goInDirection(center, bearing+Math.PI, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetStart);
+        Point lineEnd = UtilsRender.goInDirection(UtilsRender.goInDirection(center, bearing, distOut), bearing-Math.PI/2, pixelsPerMeter*offsetEnd);
 
-        if (_direction == 0 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
+        if (_direction == 0 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.CENTRE_DIVIDER_WIDE, Color.YELLOW);
         }
-        else if (_direction == 1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
+        else if (_direction == 1 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.FORWARD_DIVIDER_WIDE, Color.WHITE);
         }
-        else if (_direction == -1 && (getWidth(true) > Utils.RENDERING_WIDTH_DIVIDER + 0.5 ||
-                getWidth(false) > Utils.RENDERING_WIDTH_DIVIDER + 0.5)) {
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
+        else if (_direction == -1 && (getWidth(true) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5 ||
+                getWidth(false) > UtilsRender.RENDERING_WIDTH_DIVIDER + 0.5)) {
+            UtilsRender.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, DividerType.BACKWARD_DIVIDER_WIDE, Color.WHITE);
         }
         else {
             if (_type == null) getDividerType();
@@ -135,7 +135,7 @@ public class Divider extends RoadPiece {
                 if (_type == DividerType.DASHED_FOR_RIGHT) type = DividerType.DASHED_FOR_LEFT;
                 if (_type == DividerType.DASHED_FOR_LEFT) type = DividerType.DASHED_FOR_RIGHT;
             }
-            Utils.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
+            UtilsRender.renderRoadLinePopup(g, lineStart, lineEnd, bearing, getWidth(true), getWidth(false), pixelsPerMeter, type, _direction == 0 ? Color.YELLOW : Color.WHITE);
         }
 
     }
@@ -186,11 +186,11 @@ public class Divider extends RoadPiece {
                 // Since the roadPieces get replaced each time a tag gets changed, find the correct NEW
                 // divider in the same place as this divider. This will allow each pop-up to be used more than once.
                 RoadRenderer parent = _parent._parent.wayIdToRSR.get(_parent.getWay().getUniqueId());
-                if (!(parent instanceof MarkedRoadRenderer)) return;
-                List<RoadPiece> roadPieces = ((MarkedRoadRenderer) parent).getRoadPieces(false);
+                if (!(parent instanceof RoadRendererMarked)) return;
+                List<RoadPiece> roadPieces = ((RoadRendererMarked) parent).getRoadPieces(false);
                 for (RoadPiece rp : roadPieces) {
-                    if (rp instanceof Divider && rp._direction == _direction && rp._position == _position) {
-                        ((Divider) rp).setDividerType(type);
+                    if (rp instanceof RoadPieceDivider && rp._direction == _direction && rp._position == _position) {
+                        ((RoadPieceDivider) rp).setDividerType(type);
                     }
                 }
             }
@@ -216,15 +216,15 @@ public class Divider extends RoadPiece {
     private void getDividerType() {
         // Define cd and rh to make the logic statements more readable:
         boolean cd = _direction == 0;
-        boolean rh = Utils.isRightHand(_way);
+        boolean rh = UtilsGeneral.isRightHand(_way);
 
         // Get change values of the right side and left side lanes:
-        boolean changeFromLeft = extractChange((Lane) _left, !cd || !rh);
-        boolean changeFromRight = extractChange((Lane) _right, cd && !rh);
+        boolean changeFromLeft = extractChange((RoadPieceLane) _left, !cd || !rh);
+        boolean changeFromRight = extractChange((RoadPieceLane) _right, cd && !rh);
 
         // If one of the lanes is opening/closing, take note.  This is so the renderer can render some dashed lines as quick dashes.
-        boolean widthChanges = Math.abs(_left.getWidth(true) - _left.getWidth(false)) > 0.5 ||
-                Math.abs(_right.getWidth(true) - _right.getWidth(false)) > 0.5;
+        boolean widthChanges = _left.getWidth(true) == 0 || _left.getWidth(false) == 0 ||
+                _right.getWidth(true) == 0 || _right.getWidth(false) == 0;
 
         // Set the divider type based on the known information:
         DividerType typeIfDashed = (cd || !widthChanges) ? DividerType.DASHED : DividerType.QUICK_DASHED;
@@ -239,7 +239,7 @@ public class Divider extends RoadPiece {
     private void setDividerType(DividerType type) {
         // Define cd and rh to make the logic statements more readable:
         boolean cd = _direction == 0;
-        boolean rh = Utils.isRightHand(_way);
+        boolean rh = UtilsGeneral.isRightHand(_way);
 
         // Convert DividerType to change from left/right:
         boolean changeFromLeft = type == DividerType.DASHED ||
@@ -249,10 +249,10 @@ public class Divider extends RoadPiece {
                 type == DividerType.DASHED_FOR_LEFT;
 
         // Extract existing change values from nearby lanes:
-        boolean leftChangeLeft   = extractChange((Lane) _left,  false);
-        boolean leftChangeRight  = extractChange((Lane) _left,  true);
-        boolean rightChangeLeft  = extractChange((Lane) _right, false);
-        boolean rightChangeRight = extractChange((Lane) _right, true);
+        boolean leftChangeLeft   = extractChange((RoadPieceLane) _left,  false);
+        boolean leftChangeRight  = extractChange((RoadPieceLane) _left,  true);
+        boolean rightChangeLeft  = extractChange((RoadPieceLane) _right, false);
+        boolean rightChangeRight = extractChange((RoadPieceLane) _right, true);
         JOptionPane.showMessageDialog(_mv, _position + ":" + leftChangeLeft + ", " + leftChangeRight + ", " + rightChangeLeft + ", " + rightChangeRight);
 
         // Change those extracted values, paying close attention to the center-divider and right-hand / left-hand state.
@@ -267,12 +267,12 @@ public class Divider extends RoadPiece {
                 (rightChangeLeft) ? "not_right" : (rightChangeRight) ? "not_left" : "no";
 
         // Change the tags of the ways to the right and left of this divider:
-        ((Lane) _left).setChange(changeLeft);
-        ((Lane) _right).setChange(changeRight);
+        ((RoadPieceLane) _left).setChange(changeLeft);
+        ((RoadPieceLane) _right).setChange(changeRight);
         _parent.updateChangeTags();
     }
 
-    private boolean extractChange(Lane lane, boolean toRight) {
+    private boolean extractChange(RoadPieceLane lane, boolean toRight) {
         String change = lane.getChange();
 
         if (change.equals("yes")) return true;

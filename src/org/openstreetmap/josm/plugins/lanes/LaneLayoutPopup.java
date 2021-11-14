@@ -1,11 +1,6 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import org.openstreetmap.josm.data.Bounds;
-import org.openstreetmap.josm.data.UndoRedoHandler;
-import org.openstreetmap.josm.data.osm.DataSourceChangeEvent;
-import org.openstreetmap.josm.data.osm.DataSourceListener;
 import org.openstreetmap.josm.data.osm.Way;
-import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.tools.Territories;
 
 import javax.swing.*;
@@ -13,7 +8,6 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 public class LaneLayoutPopup extends JPanel implements ActionListener {
@@ -63,9 +57,9 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
         presetPanel.getVerticalScrollBar().setUnitIncrement(16);
         presetPanel.setViewportView(buffer);
 
-        List<Preset> presets = Utils.getPresets(Utils.isRightHand(_rr.getWay()),
+        List<Preset> presets = UtilsPresets.getPresets(UtilsGeneral.isRightHand(_rr.getWay()),
                 Territories.isIso3166Code("US", _rr.getWay().getNode(0).getCoor()) ||
-                        Territories.isIso3166Code("CA", _rr.getWay().getNode(0).getCoor()), Utils.isOneway(_rr.getWay()));
+                        Territories.isIso3166Code("CA", _rr.getWay().getNode(0).getCoor()), UtilsGeneral.isOneway(_rr.getWay()));
         inner.setLayout(new GridLayout((presets.size()+1)/2, 2, m, m));
         inner.setPreferredSize(new Dimension(3*m + 2*75, m  +  (75+m) * ((presets.size()+1)/2)));
         for (Preset preset : presets) {
@@ -86,7 +80,7 @@ public class LaneLayoutPopup extends JPanel implements ActionListener {
             public void mousePressed(MouseEvent e) {
                 changeTolerance++;
                 _parent.forceUpdateIgnore(1);
-                Utils.applyPreset(preset, w, undo);
+                UtilsPresets.applyPreset(preset, w, undo);
                 _parent.updateOneRoad(w.getUniqueId());
                 dataChange();
                 undo = true;
@@ -189,7 +183,7 @@ class RoadPanel extends JPanel {
         super();
         _rr = rr;
         _p = p;
-        _bearing = Utils.getWayBearing(_rr.getAlignment());
+        _bearing = UtilsSpatial.getWayBearing(_rr.getAlignment());
         _manager = new ClickAreaManager();
         addMouseListener(new MouseListener() {
             @Override
@@ -222,17 +216,17 @@ class RoadPanel extends JPanel {
         // Draw lane changers
         Point center = new Point(getWidth()/2, getHeight()/2);
         double dist = (roadWidth()/2)*(1+(1-roadsPerWidth)/2/roadsPerWidth);
-        Point right = Utils.goInDirection(center, _bearing+Math.PI/2, dist);
-        Point left = Utils.goInDirection(center, _bearing-Math.PI/2, dist);
+        Point right = UtilsRender.goInDirection(center, _bearing+Math.PI/2, dist);
+        Point left = UtilsRender.goInDirection(center, _bearing-Math.PI/2, dist);
         int width = 55;
         int height = 40;
-        if (_rr instanceof MarkedRoadRenderer) {
-            boolean rh = Utils.isRightHand(_rr.getWay());
-            if (Utils.isOneway(_rr.getWay())) {
-                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size(), _p);
+        if (_rr instanceof RoadRendererMarked) {
+            boolean rh = UtilsGeneral.isRightHand(_rr.getWay());
+            if (UtilsGeneral.isOneway(_rr.getWay())) {
+                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((RoadRendererMarked) _rr)._forwardLanes.size(), _p);
             } else {
-                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((MarkedRoadRenderer) _rr)._forwardLanes.size(), _p);
-                drawLaneChange((Graphics2D) g, rh ? left : right, width, height, -1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(), _p);
+                drawLaneChange((Graphics2D) g, rh ? right : left, width, height, 1, ((RoadRendererMarked) _rr)._forwardLanes.size(), _p);
+                drawLaneChange((Graphics2D) g, rh ? left : right, width, height, -1, ((RoadRendererMarked) _rr)._backwardLanes.size(), _p);
             }
         }
     }
@@ -278,8 +272,8 @@ class RoadPanel extends JPanel {
                 bothWays = Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
             } catch (Exception ignored) {}
             _rr._parent.forceUpdateIgnore(1);
-            Utils.changeLaneCount(_rr.getWay(), dir, number+1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(),
-                    ((MarkedRoadRenderer) _rr)._forwardLanes.size(), bothWays);
+            UtilsPresets.changeLaneCount(_rr.getWay(), dir, number+1, ((RoadRendererMarked) _rr)._backwardLanes.size(),
+                    ((RoadRendererMarked) _rr)._forwardLanes.size(), bothWays);
             _rr._parent.updateOneRoad(_rr.getWay().getUniqueId());
             forDataChanges.dataChange();
         };
@@ -289,8 +283,8 @@ class RoadPanel extends JPanel {
                 bothWays = Integer.parseInt(_rr.getWay().getInterestingTags().get("lanes:both_ways"));
             } catch (Exception ignored) {}
             _rr._parent.forceUpdateIgnore(1);
-            Utils.changeLaneCount(_rr.getWay(), dir, number-1, ((MarkedRoadRenderer) _rr)._backwardLanes.size(),
-                    ((MarkedRoadRenderer) _rr)._forwardLanes.size(), bothWays);
+            UtilsPresets.changeLaneCount(_rr.getWay(), dir, number-1, ((RoadRendererMarked) _rr)._backwardLanes.size(),
+                    ((RoadRendererMarked) _rr)._forwardLanes.size(), bothWays);
             _rr._parent.updateOneRoad(_rr.getWay().getUniqueId());
             forDataChanges.dataChange();
         };

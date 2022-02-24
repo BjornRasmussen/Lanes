@@ -206,24 +206,6 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
 
         // I don't think this is needed but adding this doesn't hurt.
         updateStatusLine();
-
-//        // ML TRAINING PROJECT:
-//        try {
-//            FileWriter fileWriter = new FileWriter("mlpoints.txt");
-//            PrintWriter printWriter = new PrintWriter(fileWriter);
-//            Collection<Node> nodes = MainApplication.getLayerManager().getEditDataSet().getNodes();
-//            for (Node n : nodes) {
-//                if (!n.hasTag("trees")) { continue; }
-//                String isTree = "0";
-//                if (n.hasTag("trees", "yes")) {
-//                    isTree = "1";
-//                }
-//                fileWriter.write(n.lat() + "," + n.lon() + "," + isTree + "\n");
-//            }
-//            printWriter.close();
-//        } catch (IOException e) {
-//            System.out.println("fail " + e.getMessage());
-//        }
     }
 
     @Override

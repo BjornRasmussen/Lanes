@@ -169,7 +169,7 @@ public class RoadPieceDivider extends RoadPiece {
         JPanel buttonWrapper = new JPanel();
         buttonWrapper.setBorder(new StrokeBorder(new BasicStroke(5, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND),
                 new Color(0, 0, 0, 0)));
-        Image buttonIcon = ImageProvider.get("dialogs", path + ".png").getImage();
+        Image buttonIcon = ImageProvider.get("dialogs", path).getImage();
         JButton button = new JButton(new ImageIcon(buttonIcon));
         button.setMinimumSize(new Dimension(50, 50));
         buttonWrapper.add(button);

@@ -25,24 +25,24 @@ public class UtilsPresets {
     public final static String[] twowayrighthandpresets = new String[] {"mt101y", "u2", "mt202y", "u1.5", "mt303y", "u1"};
     public final static String[] twowayrighthandpresetsUSCA = new String[] {"mt101y", "u2", "mt202y", "u1.5", "mt303y", "u1", "mt111y", "mt212y"};
 
-    public final static Image preset_u1 = ImageProvider.get("75pxpresets", "u1.png").getImage();
-    public final static Image preset_u15 = ImageProvider.get("75pxpresets", "u1.5.png").getImage();
-    public final static Image preset_u2 = ImageProvider.get("75pxpresets", "u2.png").getImage();
+    public final static Image preset_u1 = ImageProvider.get("75pxpresets", "u1").getImage();
+    public final static Image preset_u15 = ImageProvider.get("75pxpresets", "u1.5").getImage();
+    public final static Image preset_u2 = ImageProvider.get("75pxpresets", "u2").getImage();
 
-    public final static Image preset_mo1 = ImageProvider.get("75pxpresets", "mo1.png").getImage();
-    public final static Image preset_mo2 = ImageProvider.get("75pxpresets", "mo2.png").getImage();
-    public final static Image preset_mo3 = ImageProvider.get("75pxpresets", "mo3.png").getImage();
-    public final static Image preset_mo4 = ImageProvider.get("75pxpresets", "mo4.png").getImage();
+    public final static Image preset_mo1 = ImageProvider.get("75pxpresets", "mo1").getImage();
+    public final static Image preset_mo2 = ImageProvider.get("75pxpresets", "mo2").getImage();
+    public final static Image preset_mo3 = ImageProvider.get("75pxpresets", "mo3").getImage();
+    public final static Image preset_mo4 = ImageProvider.get("75pxpresets", "mo4").getImage();
 
-    public final static Image preset_mt101w = ImageProvider.get("75pxpresets", "mt101w.png").getImage();
-    public final static Image preset_mt101y = ImageProvider.get("75pxpresets", "mt101y.png").getImage();
-    public final static Image preset_mt202w = ImageProvider.get("75pxpresets", "mt202w.png").getImage();
-    public final static Image preset_mt202y = ImageProvider.get("75pxpresets", "mt202y.png").getImage();
-    public final static Image preset_mt303w = ImageProvider.get("75pxpresets", "mt303w.png").getImage();
-    public final static Image preset_mt303y = ImageProvider.get("75pxpresets", "mt303y.png").getImage();
+    public final static Image preset_mt101w = ImageProvider.get("75pxpresets", "mt101w").getImage();
+    public final static Image preset_mt101y = ImageProvider.get("75pxpresets", "mt101y").getImage();
+    public final static Image preset_mt202w = ImageProvider.get("75pxpresets", "mt202w").getImage();
+    public final static Image preset_mt202y = ImageProvider.get("75pxpresets", "mt202y").getImage();
+    public final static Image preset_mt303w = ImageProvider.get("75pxpresets", "mt303w").getImage();
+    public final static Image preset_mt303y = ImageProvider.get("75pxpresets", "mt303y").getImage();
 
-    public final static Image preset_mt111y = ImageProvider.get("75pxpresets", "mt111y.png").getImage();
-    public final static Image preset_mt212y = ImageProvider.get("75pxpresets", "mt212y.png").getImage();
+    public final static Image preset_mt111y = ImageProvider.get("75pxpresets", "mt111y").getImage();
+    public final static Image preset_mt212y = ImageProvider.get("75pxpresets", "mt212y").getImage();
 
     // </editor-fold>
 

@@ -5,6 +5,8 @@ on:
     branches: [ $default-branch ]
   pull_request:
     branches: [ $default-branch ]
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -41,7 +43,7 @@ jobs:
     - name: Build with Ant
       run: |
         cd $GITHUB_WORKSPACE/josm/plugins/${{ github.event.repository.name }}
-        if [ $GITHUB_REF_PROTECTED == true ]; then
+        if [ $GITHUB_REF_TYPE == "tag" ]; then
           version=$GITHUB_REF_NAME
         else
           version="$GITHUB_REF_NAME-$GITHUB_SHA"

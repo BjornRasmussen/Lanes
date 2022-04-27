@@ -1,6 +1,5 @@
 package org.openstreetmap.josm.plugins.lanes;
 
-import jdk.jshell.execution.Util;
 import org.openstreetmap.josm.gui.MapView;
 
 import java.awt.*;

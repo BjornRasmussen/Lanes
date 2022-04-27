@@ -77,7 +77,7 @@ public class LaneMappingMode extends MapMode implements MapViewPaintable {
 
 
     public LaneMappingMode(Mode mode) {
-        super(tr(mode == Mode.ROAD? "Lane Editing" : "Intersection Editing"), mode == Mode.ROAD ? "laneconnectivity.png" : "intersectionmode.png",
+        super(tr(mode == Mode.ROAD? "Lane Editing" : "Intersection Editing"), mode == Mode.ROAD ? "laneconnectivity" : "intersectionmode",
                 tr(mode == Mode.ROAD ? "Activate lane editing mode" : "Activate intersection mode"),
                 Shortcut.registerShortcut(mode == Mode.ROAD ? "mapmode:lanemapping" : "mapmode:intersectionmapping", tr("Mode: {0}",
                 tr(mode == Mode.ROAD ? "Lane Editing Mode" : "Intersection Editing Mode")), mode == Mode.ROAD ? KeyEvent.VK_2 : KeyEvent.VK_3, Shortcut.SHIFT),
